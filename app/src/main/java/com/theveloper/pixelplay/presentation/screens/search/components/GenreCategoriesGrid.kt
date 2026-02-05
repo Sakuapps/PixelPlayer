@@ -154,7 +154,11 @@ private fun GenreCard(
 ) {
     val isDark = androidx.compose.foundation.isSystemInDarkTheme()
     val themeColor = remember(genre, isDark) {
-        com.theveloper.pixelplay.ui.theme.GenreThemeUtils.getGenreThemeColor(genre.id, isDark)
+        com.theveloper.pixelplay.ui.theme.GenreThemeUtils.getGenreThemeColor(
+            genre = genre,
+            isDark = isDark,
+            fallbackGenreId = genre.id
+        )
     }
     val backgroundColor = themeColor.container
     val onBackgroundColor = themeColor.onContainer

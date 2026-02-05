@@ -58,6 +58,7 @@ import com.theveloper.pixelplay.data.preferences.NavBarStyle
 import com.theveloper.pixelplay.data.preferences.FullPlayerLoadingTweaks
 import com.theveloper.pixelplay.data.preferences.UserPreferencesRepository
 import com.theveloper.pixelplay.data.preferences.AlbumArtQuality
+import com.theveloper.pixelplay.data.preferences.ThemePreference
 import com.theveloper.pixelplay.data.repository.LyricsSearchResult
 import com.theveloper.pixelplay.data.repository.MusicRepository
 import com.theveloper.pixelplay.data.service.MusicNotificationProvider
@@ -204,6 +205,13 @@ class PlayerViewModel @Inject constructor(
     // Theme & Colors - delegated to ThemeStateHolder
     val currentAlbumArtColorSchemePair: StateFlow<ColorSchemePair?> = themeStateHolder.currentAlbumArtColorSchemePair
     val activePlayerColorSchemePair: StateFlow<ColorSchemePair?> = themeStateHolder.activePlayerColorSchemePair
+
+    val playerThemePreference: StateFlow<String> = userPreferencesRepository.playerThemePreferenceFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ThemePreference.ALBUM_ART
+        )
 
     val navBarCornerRadius: StateFlow<Int> = userPreferencesRepository.navBarCornerRadiusFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 32)
 
@@ -2902,6 +2910,18 @@ class PlayerViewModel @Inject constructor(
             // Cache invalidation delegated to ThemeStateHolder (if implemented) or relied on re-generation
             // individualAlbumColorSchemes was removed.
         }
+    }
+
+    suspend fun forceRegenerateAlbumPaletteForSong(song: Song): Boolean {
+        val albumArtUri = song.albumArtUriString?.takeIf { it.isNotBlank() } ?: return false
+        return runCatching {
+            // Full reset: clear all cached variants for this URI and recreate every style from scratch.
+            themeStateHolder.forceRegenerateColorScheme(
+                uriString = albumArtUri,
+                regenerateAllStyles = true
+            )
+            true
+        }.getOrDefault(false)
     }
 
     suspend fun generateAiMetadata(song: Song, fields: List<String>): Result<SongMetadata> {

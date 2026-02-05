@@ -111,259 +111,271 @@ fun AlbumDetailScreen(
     val systemNavBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val bottomBarHeightDp = NavBarContentHeight + systemNavBarInset
     var showPlaylistBottomSheet by remember { mutableStateOf(false) }
-    val surfaceColor = MaterialTheme.colorScheme.surface
-    val statusBarColor =
-        if (LocalPixelPlayDarkTheme.current) Color.Black.copy(alpha = 0.6f) else Color.White.copy(
-            alpha = 0.4f
-        )
+    val isDarkTheme = LocalPixelPlayDarkTheme.current
+    val baseColorScheme = MaterialTheme.colorScheme
+    val albumArtUri = uiState.album?.albumArtUriString?.takeIf { it.isNotBlank() }
+    val albumColorSchemeFlow = remember(albumArtUri) {
+        albumArtUri?.let { playerViewModel.themeStateHolder.getAlbumColorSchemeFlow(it) }
+    }
+    val albumColorSchemePair = albumColorSchemeFlow?.collectAsState()?.value
+    val albumColorScheme = remember(albumColorSchemePair, isDarkTheme, baseColorScheme) {
+        albumColorSchemePair?.let { pair -> if (isDarkTheme) pair.dark else pair.light }
+            ?: baseColorScheme
+    }
     val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
 
-    BackHandler(enabled = playerSheetState == PlayerSheetState.EXPANDED) {
-        playerViewModel.collapsePlayerSheet()
-    }
-
-    val isMiniPlayerVisible = stablePlayerState.currentSong != null
-    val fabBottomPadding by animateDpAsState(
-        targetValue = if (isMiniPlayerVisible) MiniPlayerHeight + 16.dp else 16.dp,
-        label = "fabPadding"
-    )
-
-    when {
-        uiState.isLoading && uiState.album == null -> {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            ContainedLoadingIndicator()
-            }
+    MaterialTheme(
+        colorScheme = albumColorScheme,
+        typography = MaterialTheme.typography,
+        shapes = MaterialTheme.shapes
+    ) {
+        BackHandler(enabled = playerSheetState == PlayerSheetState.EXPANDED) {
+            playerViewModel.collapsePlayerSheet()
         }
 
-        uiState.error != null && uiState.album == null -> {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = uiState.error!!,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
+        val isMiniPlayerVisible = stablePlayerState.currentSong != null
+        val fabBottomPadding by animateDpAsState(
+            targetValue = if (isMiniPlayerVisible) MiniPlayerHeight + 16.dp else 16.dp,
+            label = "fabPadding"
+        )
 
-        uiState.album != null -> {
-            val album = uiState.album!!
-            val songs = uiState.songs
-            val lazyListState = rememberLazyListState()
-
-            val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-            val minTopBarHeight = 64.dp + statusBarHeight
-            val maxTopBarHeight = 300.dp
-
-            val minTopBarHeightPx = with(density) { minTopBarHeight.toPx() }
-            val maxTopBarHeightPx = with(density) { maxTopBarHeight.toPx() }
-
-            val topBarHeight = remember { Animatable(maxTopBarHeightPx) }
-            var collapseFraction by remember { mutableFloatStateOf(0f) }
-
-            LaunchedEffect(topBarHeight.value) {
-                collapseFraction =
-                    1f - ((topBarHeight.value - minTopBarHeightPx) / (maxTopBarHeightPx - minTopBarHeightPx)).coerceIn(
-                        0f,
-                        1f
-                    )
-            }
-
-            val nestedScrollConnection = remember {
-                object : NestedScrollConnection {
-                    override fun onPreScroll(
-                        available: Offset,
-                        source: NestedScrollSource
-                    ): Offset {
-                        val delta = available.y
-                        val isScrollingDown = delta < 0
-
-                        if (!isScrollingDown && (lazyListState.firstVisibleItemIndex > 0 || lazyListState.firstVisibleItemScrollOffset > 0)) {
-                            return Offset.Zero
-                        }
-
-                        val previousHeight = topBarHeight.value
-                        val newHeight =
-                            (previousHeight + delta).coerceIn(minTopBarHeightPx, maxTopBarHeightPx)
-                        val consumed = newHeight - previousHeight
-
-                        if (consumed.roundToInt() != 0) {
-                            coroutineScope.launch {
-                                topBarHeight.snapTo(newHeight)
-                            }
-                        }
-
-                        val canConsumeScroll = !(isScrollingDown && newHeight == minTopBarHeightPx)
-                        return if (canConsumeScroll) Offset(0f, consumed) else Offset.Zero
-                    }
-
-                    override suspend fun onPostFling(
-                        consumed: Velocity,
-                        available: Velocity
-                    ): Velocity {
-                        return super.onPostFling(consumed, available)
-                    }
+        when {
+            uiState.isLoading && uiState.album == null -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    ContainedLoadingIndicator()
                 }
             }
 
-            LaunchedEffect(lazyListState.isScrollInProgress) {
-                if (!lazyListState.isScrollInProgress) {
-                    val shouldExpand =
-                        topBarHeight.value > (minTopBarHeightPx + maxTopBarHeightPx) / 2
-                    val canExpand =
-                        lazyListState.firstVisibleItemIndex == 0 && lazyListState.firstVisibleItemScrollOffset == 0
-
-                    val targetValue = if (shouldExpand && canExpand) {
-                        maxTopBarHeightPx
-                    } else {
-                        minTopBarHeightPx
-                    }
-
-                    if (topBarHeight.value != targetValue) {
-                        coroutineScope.launch {
-                            topBarHeight.animateTo(
-                                targetValue,
-                                spring(stiffness = Spring.StiffnessMedium)
-                            )
-                        }
-                    }
-                }
-            }
-
-            Box(modifier = Modifier
-                .nestedScroll(nestedScrollConnection)
-                .fillMaxSize()) {
-                val currentTopBarHeightDp = with(density) { topBarHeight.value.toDp() }
-                LazyColumn(
-                    state = lazyListState,
-                    contentPadding = PaddingValues(
-                        top = currentTopBarHeightDp,
-                        start = 16.dp,
-                        end = if ((lazyListState.canScrollForward || lazyListState.canScrollBackward) && collapseFraction > 0.95f) 24.dp else 16.dp,
-                        bottom = fabBottomPadding + 80.dp // To account for FAB
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+            uiState.error != null && uiState.album == null -> {
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    items(songs, key = { song -> "album_song_${song.id}" }) { song ->
-                        EnhancedSongListItem(
-                            song = song,
-                            isCurrentSong = stablePlayerState.currentSong?.id == song.id,
-                            isPlaying = stablePlayerState.isPlaying,
-                            showAlbumArt = false,
-                            onMoreOptionsClick = {
-                                playerViewModel.selectSongForInfo(song)
-                                showSongInfoBottomSheet = true
-                            },
-                            onClick = { playerViewModel.showAndPlaySong(song, songs) }
-                        )
-                    }
-                }
-
-                if (collapseFraction > 0.95f) {
-                    ExpressiveScrollBar(
-                        listState = lazyListState,
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .padding(
-                                top = currentTopBarHeightDp + 12.dp,
-                                bottom = fabBottomPadding + 80.dp
-                            )
+                    Text(
+                        text = uiState.error!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyLarge
                     )
                 }
+            }
 
-                CollapsingAlbumTopBar(
-                    album = album,
-                    songsCount = songs.size,
-                    collapseFraction = collapseFraction,
-                    headerHeight = currentTopBarHeightDp,
-                    onBackPressed = { navController.popBackStack() },
-                    onPlayClick = {
-                        if (songs.isNotEmpty()) {
-                            val randomSong = songs.random()
-                            playerViewModel.showAndPlaySong(randomSong, songs)
+            uiState.album != null -> {
+                val album = uiState.album!!
+                val songs = uiState.songs
+                val lazyListState = rememberLazyListState()
+
+                val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                val minTopBarHeight = 64.dp + statusBarHeight
+                val maxTopBarHeight = 300.dp
+
+                val minTopBarHeightPx = with(density) { minTopBarHeight.toPx() }
+                val maxTopBarHeightPx = with(density) { maxTopBarHeight.toPx() }
+
+                val topBarHeight = remember { Animatable(maxTopBarHeightPx) }
+                var collapseFraction by remember { mutableFloatStateOf(0f) }
+
+                LaunchedEffect(topBarHeight.value) {
+                    collapseFraction =
+                        1f - ((topBarHeight.value - minTopBarHeightPx) / (maxTopBarHeightPx - minTopBarHeightPx)).coerceIn(
+                            0f,
+                            1f
+                        )
+                }
+
+                val nestedScrollConnection = remember {
+                    object : NestedScrollConnection {
+                        override fun onPreScroll(
+                            available: Offset,
+                            source: NestedScrollSource
+                        ): Offset {
+                            val delta = available.y
+                            val isScrollingDown = delta < 0
+
+                            if (!isScrollingDown && (lazyListState.firstVisibleItemIndex > 0 || lazyListState.firstVisibleItemScrollOffset > 0)) {
+                                return Offset.Zero
+                            }
+
+                            val previousHeight = topBarHeight.value
+                            val newHeight =
+                                (previousHeight + delta).coerceIn(minTopBarHeightPx, maxTopBarHeightPx)
+                            val consumed = newHeight - previousHeight
+
+                            if (consumed.roundToInt() != 0) {
+                                coroutineScope.launch {
+                                    topBarHeight.snapTo(newHeight)
+                                }
+                            }
+
+                            val canConsumeScroll = !(isScrollingDown && newHeight == minTopBarHeightPx)
+                            return if (canConsumeScroll) Offset(0f, consumed) else Offset.Zero
+                        }
+
+                        override suspend fun onPostFling(
+                            consumed: Velocity,
+                            available: Velocity
+                        ): Velocity {
+                            return super.onPostFling(consumed, available)
                         }
                     }
-                )
-            }
-        }
-    }
-    if (showSongInfoBottomSheet && selectedSongForInfo != null) {
-        val currentSong = selectedSongForInfo
-        val isFavorite = remember(currentSong?.id, favoriteIds) {
-            derivedStateOf { currentSong?.let { favoriteIds.contains(it.id) } }
-        }.value ?: false
+                }
 
-        if (currentSong != null) {
-            val removeFromListTrigger = remember(uiState.songs) {
-                {
-                    viewModel.update(uiState.songs.filterNot { it.id == currentSong.id })
+                LaunchedEffect(lazyListState.isScrollInProgress) {
+                    if (!lazyListState.isScrollInProgress) {
+                        val shouldExpand =
+                            topBarHeight.value > (minTopBarHeightPx + maxTopBarHeightPx) / 2
+                        val canExpand =
+                            lazyListState.firstVisibleItemIndex == 0 && lazyListState.firstVisibleItemScrollOffset == 0
+
+                        val targetValue = if (shouldExpand && canExpand) {
+                            maxTopBarHeightPx
+                        } else {
+                            minTopBarHeightPx
+                        }
+
+                        if (topBarHeight.value != targetValue) {
+                            coroutineScope.launch {
+                                topBarHeight.animateTo(
+                                    targetValue,
+                                    spring(stiffness = Spring.StiffnessMedium)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Box(modifier = Modifier
+                    .nestedScroll(nestedScrollConnection)
+                    .fillMaxSize()) {
+                    val currentTopBarHeightDp = with(density) { topBarHeight.value.toDp() }
+                    LazyColumn(
+                        state = lazyListState,
+                        contentPadding = PaddingValues(
+                            top = currentTopBarHeightDp,
+                            start = 16.dp,
+                            end = if ((lazyListState.canScrollForward || lazyListState.canScrollBackward) && collapseFraction > 0.95f) 24.dp else 16.dp,
+                            bottom = fabBottomPadding + 80.dp // To account for FAB
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .fillMaxSize()
+                    ) {
+                        items(songs, key = { song -> "album_song_${song.id}" }) { song ->
+                            EnhancedSongListItem(
+                                song = song,
+                                isCurrentSong = stablePlayerState.currentSong?.id == song.id,
+                                isPlaying = stablePlayerState.isPlaying,
+                                showAlbumArt = false,
+                                onMoreOptionsClick = {
+                                    playerViewModel.selectSongForInfo(song)
+                                    showSongInfoBottomSheet = true
+                                },
+                                onClick = { playerViewModel.showAndPlaySong(song, songs) }
+                            )
+                        }
+                    }
+
+                    if (collapseFraction > 0.95f) {
+                        ExpressiveScrollBar(
+                            listState = lazyListState,
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .padding(
+                                    top = currentTopBarHeightDp + 12.dp,
+                                    bottom = fabBottomPadding + 80.dp
+                                )
+                        )
+                    }
+
+                    CollapsingAlbumTopBar(
+                        album = album,
+                        songsCount = songs.size,
+                        collapseFraction = collapseFraction,
+                        headerHeight = currentTopBarHeightDp,
+                        onBackPressed = { navController.popBackStack() },
+                        onPlayClick = {
+                            if (songs.isNotEmpty()) {
+                                val randomSong = songs.random()
+                                playerViewModel.showAndPlaySong(randomSong, songs)
+                            }
+                        }
+                    )
                 }
             }
-            SongInfoBottomSheet(
-                song = currentSong,
-                isFavorite = isFavorite,
-                onToggleFavorite = {
-                    playerViewModel.toggleFavoriteSpecificSong(currentSong)
-                },
-                onDismiss = { showSongInfoBottomSheet = false },
-                onPlaySong = {
-                    playerViewModel.showAndPlaySong(currentSong)
-                    showSongInfoBottomSheet = false
-                },
-                onAddToQueue = {
-                    playerViewModel.addSongToQueue(currentSong)
-                    showSongInfoBottomSheet = false
-                },
-                onAddNextToQueue = {
-                    playerViewModel.addSongNextToQueue(currentSong)
-                    showSongInfoBottomSheet = false
-                },
-                onAddToPlayList = {
-                    showPlaylistBottomSheet = true;
-                },
-                onDeleteFromDevice = playerViewModel::deleteFromDevice,
-                onNavigateToAlbum = {
-                    navController.navigate(Screen.AlbumDetail.createRoute(currentSong.albumId))
-                    showSongInfoBottomSheet = false
-                },
-                onNavigateToArtist = {
-                    navController.navigate(Screen.ArtistDetail.createRoute(currentSong.artistId))
-                    showSongInfoBottomSheet = false
-                },
-                onEditSong = { newTitle, newArtist, newAlbum, newGenre, newLyrics, newTrackNumber, coverArtUpdate ->
-                    playerViewModel.editSongMetadata(
-                        currentSong,
-                        newTitle,
-                        newArtist,
-                        newAlbum,
-                        newGenre,
-                        newLyrics,
-                        newTrackNumber,
-                        coverArtUpdate
-                    )
-                },
-                generateAiMetadata = { fields ->
-                    playerViewModel.generateAiMetadata(currentSong, fields)
-                },
-                removeFromListTrigger = removeFromListTrigger
-            )
-            if (showPlaylistBottomSheet) {
-                val playlistUiState by playlistViewModel.uiState.collectAsState()
+        }
+        if (showSongInfoBottomSheet && selectedSongForInfo != null) {
+            val currentSong = selectedSongForInfo
+            val isFavorite = remember(currentSong?.id, favoriteIds) {
+                derivedStateOf { currentSong?.let { favoriteIds.contains(it.id) } }
+            }.value ?: false
 
-                PlaylistBottomSheet(
-                    playlistUiState = playlistUiState,
-                    songs = listOf(currentSong),
-                    onDismiss = { showPlaylistBottomSheet = false },
-                    bottomBarHeight = bottomBarHeightDp,
-                    playerViewModel = playerViewModel
+            if (currentSong != null) {
+                val removeFromListTrigger = remember(uiState.songs) {
+                    {
+                        viewModel.update(uiState.songs.filterNot { it.id == currentSong.id })
+                    }
+                }
+                SongInfoBottomSheet(
+                    song = currentSong,
+                    isFavorite = isFavorite,
+                    onToggleFavorite = {
+                        playerViewModel.toggleFavoriteSpecificSong(currentSong)
+                    },
+                    onDismiss = { showSongInfoBottomSheet = false },
+                    onPlaySong = {
+                        playerViewModel.showAndPlaySong(currentSong)
+                        showSongInfoBottomSheet = false
+                    },
+                    onAddToQueue = {
+                        playerViewModel.addSongToQueue(currentSong)
+                        showSongInfoBottomSheet = false
+                    },
+                    onAddNextToQueue = {
+                        playerViewModel.addSongNextToQueue(currentSong)
+                        showSongInfoBottomSheet = false
+                    },
+                    onAddToPlayList = {
+                        showPlaylistBottomSheet = true;
+                    },
+                    onDeleteFromDevice = playerViewModel::deleteFromDevice,
+                    onNavigateToAlbum = {
+                        navController.navigate(Screen.AlbumDetail.createRoute(currentSong.albumId))
+                        showSongInfoBottomSheet = false
+                    },
+                    onNavigateToArtist = {
+                        navController.navigate(Screen.ArtistDetail.createRoute(currentSong.artistId))
+                        showSongInfoBottomSheet = false
+                    },
+                    onEditSong = { newTitle, newArtist, newAlbum, newGenre, newLyrics, newTrackNumber, coverArtUpdate ->
+                        playerViewModel.editSongMetadata(
+                            currentSong,
+                            newTitle,
+                            newArtist,
+                            newAlbum,
+                            newGenre,
+                            newLyrics,
+                            newTrackNumber,
+                            coverArtUpdate
+                        )
+                    },
+                    generateAiMetadata = { fields ->
+                        playerViewModel.generateAiMetadata(currentSong, fields)
+                    },
+                    removeFromListTrigger = removeFromListTrigger
                 )
+                if (showPlaylistBottomSheet) {
+                    val playlistUiState by playlistViewModel.uiState.collectAsState()
+
+                    PlaylistBottomSheet(
+                        playlistUiState = playlistUiState,
+                        songs = listOf(currentSong),
+                        onDismiss = { showPlaylistBottomSheet = false },
+                        bottomBarHeight = bottomBarHeightDp,
+                        playerViewModel = playerViewModel
+                    )
+                }
             }
         }
     }

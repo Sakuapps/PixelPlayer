@@ -404,7 +404,14 @@ class MusicRepositoryImpl @Inject constructor(
             }
 
             val dynamicGenres = genresMap.keys.mapNotNull { genreName ->
-                val id = if (genreName.equals("Unknown", ignoreCase = true)) "unknown" else genreName.lowercase().replace(" ", "_")
+                val id = if (genreName.equals("Unknown", ignoreCase = true)) {
+                    "unknown"
+                } else {
+                    genreName
+                        .lowercase()
+                        .replace(" ", "_")
+                        .replace("/", "_")
+                }
                 // Generate colors dynamically or use a default for "Unknown"
                 val colorInt = genreName.hashCode()
                 val lightColorHex = "#${(colorInt and 0x00FFFFFF).toString(16).padStart(6, '0').uppercase()}"

@@ -1,7 +1,11 @@
 package com.theveloper.pixelplay.ui.theme
 
+import android.util.LruCache
+import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import com.theveloper.pixelplay.data.model.Genre
+import com.theveloper.pixelplay.data.preferences.AlbumArtPaletteStyle
 import kotlin.math.abs
 
 data class GenreThemeColor(
@@ -10,6 +14,7 @@ data class GenreThemeColor(
 )
 
 object GenreThemeUtils {
+    private val genreColorSchemeCache = LruCache<Int, ColorScheme>(96)
     
     private val darkColors = listOf(
         GenreThemeColor(Color(0xFF004A77), Color(0xFFC2E7FF)), // Blue
@@ -63,12 +68,19 @@ object GenreThemeUtils {
         return if (isDark) darkColors[index] else lightColors[index]
     }
 
-    private fun androidx.compose.ui.graphics.Color.shiftHue(amount: Float): androidx.compose.ui.graphics.Color {
-        val argb = this.toArgb()
-        val hsv = FloatArray(3)
-        android.graphics.Color.colorToHSV(argb, hsv)
-        hsv[0] = (hsv[0] + amount + 360) % 360
-        return androidx.compose.ui.graphics.Color(android.graphics.Color.HSVToColor(hsv))
+    fun getGenreThemeColor(
+        genre: Genre?,
+        isDark: Boolean,
+        fallbackGenreId: String = "unknown"
+    ): GenreThemeColor {
+        val seed = resolveSeedColor(genre = genre, isDark = isDark, fallbackGenreId = fallbackGenreId)
+        val explicitOnColor = parseHexColor(
+            if (isDark) genre?.onDarkColorHex else genre?.onLightColorHex
+        )
+        return GenreThemeColor(
+            container = seed,
+            onContainer = explicitOnColor ?: seed.contrastContentColor()
+        )
     }
 
     private fun androidx.compose.ui.graphics.Color.contrastContentColor(): androidx.compose.ui.graphics.Color {
@@ -85,38 +97,63 @@ object GenreThemeUtils {
         }
     }
 
-    @androidx.compose.runtime.Composable
+    fun getGenreColorScheme(
+        genre: Genre?,
+        isDark: Boolean,
+        genreIdFallback: String = "unknown",
+        paletteStyle: AlbumArtPaletteStyle = AlbumArtPaletteStyle.EXPRESSIVE
+    ): ColorScheme {
+        val seed = resolveSeedColor(
+            genre = genre,
+            isDark = isDark,
+            fallbackGenreId = genreIdFallback
+        )
+        val cacheKey = ((seed.toArgb() * 31) + if (isDark) 1 else 0) * 31 + paletteStyle.ordinal
+        genreColorSchemeCache.get(cacheKey)?.let { return it }
+
+        val pair = generateColorSchemeFromSeed(
+            seedColor = seed,
+            paletteStyle = paletteStyle
+        )
+        val scheme = if (isDark) pair.dark else pair.light
+        genreColorSchemeCache.put(cacheKey, scheme)
+        return scheme
+    }
+
     fun getGenreColorScheme(
         genreId: String,
         isDark: Boolean,
-        baseScheme: androidx.compose.material3.ColorScheme = androidx.compose.material3.MaterialTheme.colorScheme
-    ): androidx.compose.material3.ColorScheme {
-        val themeColor = getGenreThemeColor(genreId, isDark)
-        val primarySeed = themeColor.container
-        
-        // Generate Secondary (Analogous +25) and Tertiary (Triadic +120)
-        val secondarySeed = primarySeed.shiftHue(25f)
-        val tertiarySeed = primarySeed.shiftHue(120f)
-        
-        // We derive the tonal palettes simply by opacity or reuse for now to avoid full HCT engine overhead.
-        
-        return baseScheme.copy(
-            primary = themeColor.onContainer,
-            onPrimary = themeColor.container,
-            primaryContainer = themeColor.container,
-            onPrimaryContainer = themeColor.onContainer,
-            
-            secondary = secondarySeed,
-            onSecondary = secondarySeed.contrastContentColor(), 
-            secondaryContainer = secondarySeed, // Solid container
-            onSecondaryContainer = secondarySeed.contrastContentColor(),
-            
-            tertiary = tertiarySeed,
-            onTertiary = tertiarySeed.contrastContentColor(),
-            tertiaryContainer = tertiarySeed, // Solid container
-            onTertiaryContainer = tertiarySeed.contrastContentColor(),
-            
-            surface = themeColor.container // Tinted surface for contrast
+        paletteStyle: AlbumArtPaletteStyle = AlbumArtPaletteStyle.EXPRESSIVE
+    ): ColorScheme {
+        return getGenreColorScheme(
+            genre = null,
+            isDark = isDark,
+            genreIdFallback = genreId,
+            paletteStyle = paletteStyle
         )
+    }
+
+    private fun resolveSeedColor(
+        genre: Genre?,
+        isDark: Boolean,
+        fallbackGenreId: String
+    ): Color {
+        val explicitSeed = parseHexColor(
+            if (isDark) genre?.darkColorHex else genre?.lightColorHex
+        )
+        if (explicitSeed != null) return explicitSeed
+
+        val fallbackId = genre?.id?.takeIf { it.isNotBlank() } ?: fallbackGenreId
+        return getGenreThemeColor(fallbackId, isDark).container
+    }
+
+    private fun parseHexColor(hex: String?): Color? {
+        if (hex.isNullOrBlank()) return null
+        val normalized = if (hex.startsWith("#")) hex else "#$hex"
+        return try {
+            Color(android.graphics.Color.parseColor(normalized))
+        } catch (_: IllegalArgumentException) {
+            null
+        }
     }
 }

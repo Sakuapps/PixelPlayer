@@ -65,7 +65,6 @@ import com.theveloper.pixelplay.presentation.viewmodel.PlayerViewModel
 import com.theveloper.pixelplay.presentation.viewmodel.StablePlayerState
 import com.theveloper.pixelplay.ui.theme.LocalPixelPlayDarkTheme
 import com.theveloper.pixelplay.utils.formatDuration
-import com.theveloper.pixelplay.utils.hexToColor
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -119,6 +118,7 @@ fun GenreDetailScreen(
     val stablePlayerState by playerViewModel.stablePlayerState.collectAsState()
     val favoriteSongIds by playerViewModel.favoriteSongIds.collectAsState()
     val playlistUiState by playlistViewModel.uiState.collectAsState()
+    val libraryGenres by playerViewModel.genres.collectAsState()
     
     // Get artists to resolve images
     val artists by playerViewModel.playerUiState.map { it.artists }.collectAsState(initial = persistentListOf())
@@ -199,9 +199,16 @@ fun GenreDetailScreen(
     // Colors
     val defaultContainer = MaterialTheme.colorScheme.surfaceVariant
     val defaultOnContainer = MaterialTheme.colorScheme.onSurfaceVariant
-    val themeColor = remember(uiState.genre?.id, darkMode, defaultContainer, defaultOnContainer) {
-        if (uiState.genre != null) {
-            com.theveloper.pixelplay.ui.theme.GenreThemeUtils.getGenreThemeColor(uiState.genre!!.id, darkMode)
+    val themeGenre = remember(libraryGenres, decodedGenreId) {
+        libraryGenres.firstOrNull { it.id.equals(decodedGenreId, ignoreCase = true) }
+    }
+    val themeColor = remember(themeGenre, decodedGenreId, darkMode, defaultContainer, defaultOnContainer) {
+        if (themeGenre != null) {
+            com.theveloper.pixelplay.ui.theme.GenreThemeUtils.getGenreThemeColor(
+                genre = themeGenre,
+                isDark = darkMode,
+                fallbackGenreId = decodedGenreId
+            )
         } else {
             com.theveloper.pixelplay.ui.theme.GenreThemeColor(
                 defaultContainer,
@@ -212,6 +219,8 @@ fun GenreDetailScreen(
     
     val startColor = themeColor.container
     val contentColor = themeColor.onContainer
+    val genreDisplayName = themeGenre?.name ?: uiState.genre?.name ?: "Genre"
+    val genreShuffleLabel = "$genreDisplayName Shuffle"
     
     // FAB Logic
     var showSortSheet by remember { mutableStateOf(false) }
@@ -251,15 +260,16 @@ fun GenreDetailScreen(
     }
 
     // Dynamic Theme
-    val genreColorScheme = com.theveloper.pixelplay.ui.theme.GenreThemeUtils.getGenreColorScheme(
-        genreId = uiState.genre?.id ?: "unknown",
-        isDark = darkMode
-    )
+    val genreColorScheme = remember(themeGenre, decodedGenreId, darkMode) {
+        com.theveloper.pixelplay.ui.theme.GenreThemeUtils.getGenreColorScheme(
+            genre = themeGenre,
+            genreIdFallback = decodedGenreId,
+            isDark = darkMode
+        )
+    }
 
     // Capture Neutral Colors from the App Theme (before overriding)
     val baseColorScheme = MaterialTheme.colorScheme
-    val neutralOnSurface = MaterialTheme.colorScheme.onSurface
-    val neutralSurfaceContainer = MaterialTheme.colorScheme.surfaceContainer
 
     MaterialTheme(colorScheme = genreColorScheme) {
         Box(
@@ -270,69 +280,65 @@ fun GenreDetailScreen(
         ) {
             val currentTopBarHeightDp = with(density) { topBarHeight.value.toDp() }
 
-                // Content
-            CompositionLocalProvider(
-                LocalContentColor provides neutralOnSurface
+            // Content
+            LazyColumn(
+                state = lazyListState,
+                contentPadding = PaddingValues(
+                    top = currentTopBarHeightDp + 8.dp, // Push content down initially
+                    start = 8.dp,
+                    // Only add end padding if scrollbar is visible (collapsed header)
+                    end = if ((lazyListState.canScrollForward || lazyListState.canScrollBackward) && collapseFraction > 0.95f) 20.dp else 8.dp,
+                    bottom = fabBottomPadding + 148.dp
+                ),
+                modifier = Modifier.fillMaxSize()
             ) {
-                LazyColumn(
-                    state = lazyListState,
-                    contentPadding = PaddingValues(
-                        top = currentTopBarHeightDp + 8.dp, // Push content down initially
-                        start = 8.dp,
-                        // Only add end padding if scrollbar is visible (collapsed header)
-                        end = if ((lazyListState.canScrollForward || lazyListState.canScrollBackward) && collapseFraction > 0.95f) 20.dp else 8.dp,
-                        bottom = fabBottomPadding + 148.dp
-                    ),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    displaySections.forEach { section ->
-                        when (section) {
-                            is SectionData.ArtistSection -> {
-                                ArtistSection(
-                                    section = section,
-                                    artists = artists,
-                                    onSongClick = { song ->
-                                        playerViewModel.showAndPlaySong(song, sortedSongs, uiState.genre?.name ?: "Genre")
-                                    },
-                                    stablePlayerState = stablePlayerState,
-                                    onMoreOptionsClick = { song -> showSongOptionsSheet = song }
-                                )
-                            }
-                            is SectionData.AlbumSection -> {
-                                AlbumSection(
-                                    section = section,
-                                    onSongClick = { song ->
-                                         playerViewModel.showAndPlaySong(song, sortedSongs, uiState.genre?.name ?: "Genre")
-                                    },
-                                    stablePlayerState = stablePlayerState,
-                                    onMoreOptionsClick = { song -> showSongOptionsSheet = song }
-                                )
-                            }
-                            is SectionData.FlatList -> {
-                                // Add vertical spacing before flat list if needed, or handle within
-                                // For FlatList, we can just use items directly but simpler to keep consistency
-                                items(
-                                    items = section.songs,
-                                    key = { it.id }
-                                ) { song ->
-                                    Box(modifier = Modifier.animateItem()) {
-                                        EnhancedSongListItem(
-                                            song = song,
-                                            isPlaying = stablePlayerState.isPlaying,
-                                            isCurrentSong = stablePlayerState.currentSong?.id == song.id,
-                                            onClick = {
-                                                playerViewModel.showAndPlaySong(song, sortedSongs, uiState.genre?.name ?: "Genre")
-                                            },
-                                            onMoreOptionsClick = { showSongOptionsSheet = it }
-                                        )
-                                    }
-                                    Spacer(Modifier.height(4.dp))
+                displaySections.forEach { section ->
+                    when (section) {
+                        is SectionData.ArtistSection -> {
+                            ArtistSection(
+                                section = section,
+                                artists = artists,
+                                onSongClick = { song ->
+                                    playerViewModel.showAndPlaySong(song, sortedSongs, genreDisplayName)
+                                },
+                                stablePlayerState = stablePlayerState,
+                                onMoreOptionsClick = { song -> showSongOptionsSheet = song }
+                            )
+                        }
+                        is SectionData.AlbumSection -> {
+                            AlbumSection(
+                                section = section,
+                                onSongClick = { song ->
+                                    playerViewModel.showAndPlaySong(song, sortedSongs, genreDisplayName)
+                                },
+                                stablePlayerState = stablePlayerState,
+                                onMoreOptionsClick = { song -> showSongOptionsSheet = song }
+                            )
+                        }
+                        is SectionData.FlatList -> {
+                            // Add vertical spacing before flat list if needed, or handle within
+                            // For FlatList, we can just use items directly but simpler to keep consistency
+                            items(
+                                items = section.songs,
+                                key = { it.id }
+                            ) { song ->
+                                Box(modifier = Modifier.animateItem()) {
+                                    EnhancedSongListItem(
+                                        song = song,
+                                        isPlaying = stablePlayerState.isPlaying,
+                                        isCurrentSong = stablePlayerState.currentSong?.id == song.id,
+                                        onClick = {
+                                            playerViewModel.showAndPlaySong(song, sortedSongs, genreDisplayName)
+                                        },
+                                        onMoreOptionsClick = { showSongOptionsSheet = it }
+                                    )
                                 }
+                                Spacer(Modifier.height(4.dp))
                             }
                         }
-                        // Add spacing between sections
-                        item { Spacer(Modifier.height(16.dp)) }
                     }
+                    // Add spacing between sections
+                    item { Spacer(Modifier.height(16.dp)) }
                 }
             }
 
@@ -352,14 +358,14 @@ fun GenreDetailScreen(
             // Collapsible Top Bar with Gradient (On Top of List, High Z-Index)
             // This ensures the gradient is ON TOP of the scrolling content, so content scrolls BEHIND it.
             GenreCollapsibleTopBar(
-                title = uiState.genre?.name ?: "Genre",
+                title = genreDisplayName,
                 collapseFraction = collapseFraction,
                 headerHeight = currentTopBarHeightDp,
                 onBackPressed = { navController.popBackStack() },
                 startColor = startColor,
                 contentColor = contentColor,
-                containerColor = neutralSurfaceContainer, // Collapsed Background is Neutral
-                collapsedContentColor = neutralOnSurface // Collapsed Content is Neutral
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                collapsedContentColor = MaterialTheme.colorScheme.onSurface
             )
         
             // FAB
@@ -394,7 +400,7 @@ fun GenreDetailScreen(
                     },
                     onShuffle = {
                         if (uiState.songs.isNotEmpty()) {
-                            playerViewModel.showAndPlaySong(uiState.songs.random(), uiState.songs, uiState.genre?.name ?: "Genre Shuffle")
+                            playerViewModel.showAndPlaySong(uiState.songs.random(), uiState.songs, genreShuffleLabel)
                             showSortSheet = false
                         }
                     },
@@ -448,7 +454,11 @@ fun GenreDetailScreen(
             showSongOptionsSheet?.let { song ->
                 val isFavorite = favoriteSongIds.contains(song.id)
 
-                MaterialTheme(colorScheme = baseColorScheme) {
+                MaterialTheme(
+                    colorScheme = genreColorScheme,
+                    typography = MaterialTheme.typography,
+                    shapes = MaterialTheme.shapes
+                ) {
                     SongInfoBottomSheet(
                         song = song,
                         isFavorite = isFavorite,
@@ -457,7 +467,7 @@ fun GenreDetailScreen(
                         },
                         onDismiss = { showSongOptionsSheet = null },
                         onPlaySong = {
-                            playerViewModel.showAndPlaySong(song, sortedSongs, uiState.genre?.name ?: "Genre")
+                            playerViewModel.showAndPlaySong(song, sortedSongs, genreDisplayName)
                             showSongOptionsSheet = null
                         },
                         onAddToQueue = {
