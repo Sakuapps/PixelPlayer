@@ -139,47 +139,45 @@ abstract class PixelPlayDatabase : RoomDatabase() {
                     )
                 """.trimIndent())
 
-                // Backport upstream MIGRATION_14_15 changes for users who were on local branch
-                try {
-                    db.execSQL("ALTER TABLE album_art_themes ADD COLUMN paletteStyle TEXT NOT NULL DEFAULT 'tonal_spot'")
-                } catch (e: Exception) {
-                    // Column might already exist
-                }
+                // Fix for album_art_themes schema mismatch (Backport upstream MIGRATION_14_15 logic)
+                // Since this table is a cache and the schema is complex (100 columns), it is safer to DROP and RECREATE
+                // to ensure it exactly matches AlbumArtThemeEntity and avoid validation crashes.
+                db.execSQL("DROP TABLE IF EXISTS album_art_themes")
 
-                val newRoleColumns = listOf(
-                    "surfaceBright",
-                    "surfaceDim",
-                    "surfaceContainer",
-                    "surfaceContainerHigh",
-                    "surfaceContainerHighest",
-                    "surfaceContainerLow",
-                    "surfaceContainerLowest",
-                    "primaryFixed",
-                    "primaryFixedDim",
-                    "onPrimaryFixed",
-                    "onPrimaryFixedVariant",
-                    "secondaryFixed",
-                    "secondaryFixedDim",
-                    "onSecondaryFixed",
-                    "onSecondaryFixedVariant",
-                    "tertiaryFixed",
-                    "tertiaryFixedDim",
-                    "onTertiaryFixed",
-                    "onTertiaryFixedVariant"
+                val colorColumns = listOf(
+                    "primary", "onPrimary", "primaryContainer", "onPrimaryContainer",
+                    "secondary", "onSecondary", "secondaryContainer", "onSecondaryContainer",
+                    "tertiary", "onTertiary", "tertiaryContainer", "onTertiaryContainer",
+                    "background", "onBackground", "surface", "onSurface",
+                    "surfaceVariant", "onSurfaceVariant", "error", "onError",
+                    "outline", "errorContainer", "onErrorContainer",
+                    "inversePrimary", "inverseSurface", "inverseOnSurface",
+                    "surfaceTint", "outlineVariant", "scrim",
+                    "surfaceBright", "surfaceDim",
+                    "surfaceContainer", "surfaceContainerHigh", "surfaceContainerHighest", "surfaceContainerLow", "surfaceContainerLowest",
+                    "primaryFixed", "primaryFixedDim", "onPrimaryFixed", "onPrimaryFixedVariant",
+                    "secondaryFixed", "secondaryFixedDim", "onSecondaryFixed", "onSecondaryFixedVariant",
+                    "tertiaryFixed", "tertiaryFixedDim", "onTertiaryFixed", "onTertiaryFixedVariant"
                 )
 
-                val prefixes = listOf("light_", "dark_")
-                prefixes.forEach { prefix ->
-                    newRoleColumns.forEach { role ->
-                        try {
-                            db.execSQL("ALTER TABLE album_art_themes ADD COLUMN ${prefix}${role} TEXT NOT NULL DEFAULT '#00000000'")
-                        } catch (e: Exception) {
-                            // Column might already exist
-                        }
+                val themePrefixes = listOf("light_", "dark_")
+                val columnDefinitions = StringBuilder()
+                
+                // Add standard columns
+                columnDefinitions.append("albumArtUriString TEXT NOT NULL, ")
+                columnDefinitions.append("paletteStyle TEXT NOT NULL, ")
+
+                // Add dynamic color columns
+                themePrefixes.forEach { prefix ->
+                    colorColumns.forEach { column ->
+                        columnDefinitions.append("${prefix}${column} TEXT NOT NULL, ")
                     }
                 }
-                // The table is a cache; wipe stale rows so we always regenerate with full token data.
-                db.execSQL("DELETE FROM album_art_themes")
+
+                // Remove trailing comma and space
+                val columnsSql = columnDefinitions.toString().trimEnd(',', ' ')
+
+                db.execSQL("CREATE TABLE IF NOT EXISTS album_art_themes ($columnsSql, PRIMARY KEY(albumArtUriString))")
             }
         }
         
