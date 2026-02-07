@@ -476,6 +476,7 @@ class MainActivity : ComponentActivity() {
                 Screen.Settings.route,
                 Screen.PlaylistDetail.route,
                 Screen.DailyMixScreen.route,
+                Screen.RecentlyPlayed.route,
                 Screen.GenreDetail.route,
                 Screen.AlbumDetail.route,
                 Screen.ArtistDetail.route,
@@ -489,7 +490,8 @@ class MainActivity : ComponentActivity() {
                 Screen.Equalizer.route,
                 Screen.SettingsCategory.route,
                 Screen.DelimiterConfig.route,
-                Screen.PaletteStyle.route
+                Screen.PaletteStyle.route,
+                Screen.RecentlyPlayed.route
             )
         }
         val shouldHideNavigationBar by remember(currentRoute, isSearchBarActive) {

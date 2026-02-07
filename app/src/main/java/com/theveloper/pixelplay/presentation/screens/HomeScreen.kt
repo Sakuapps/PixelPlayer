@@ -56,6 +56,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -74,8 +79,10 @@ import com.theveloper.pixelplay.presentation.components.HomeGradientTopBar
 import com.theveloper.pixelplay.presentation.components.HomeOptionsBottomSheet
 import com.theveloper.pixelplay.presentation.components.MiniPlayerHeight
 import com.theveloper.pixelplay.presentation.components.NavBarContentHeight
+import com.theveloper.pixelplay.presentation.components.RecentlyPlayedSection
 import com.theveloper.pixelplay.presentation.components.SmartImage
 import com.theveloper.pixelplay.presentation.components.StatsOverviewCard
+import com.theveloper.pixelplay.presentation.model.mapRecentlyPlayedSongs
 import com.theveloper.pixelplay.presentation.components.subcomps.PlayingEqIcon
 import com.theveloper.pixelplay.presentation.navigation.Screen
 import com.theveloper.pixelplay.presentation.viewmodel.PlayerViewModel
@@ -110,6 +117,7 @@ fun HomeScreen(
     val allSongs by playerViewModel.allSongsFlow.collectAsState(initial = emptyList())
     val dailyMixSongs by playerViewModel.dailyMixSongs.collectAsState()
     val curatedYourMixSongs by playerViewModel.yourMixSongs.collectAsState()
+    val playbackHistory by playerViewModel.playbackHistory.collectAsState()
 
     val yourMixSongs = remember(curatedYourMixSongs, dailyMixSongs, allSongs) {
         when {
@@ -117,6 +125,16 @@ fun HomeScreen(
             dailyMixSongs.isNotEmpty() -> dailyMixSongs
             else -> allSongs.toImmutableList()
         }
+    }
+    val recentlyPlayedSongs = remember(playbackHistory, allSongs) {
+        mapRecentlyPlayedSongs(
+            playbackHistory = playbackHistory,
+            songs = allSongs,
+            maxItems = 64
+        )
+    }
+    val recentlyPlayedQueue = remember(recentlyPlayedSongs) {
+        recentlyPlayedSongs.map { it.song }.toImmutableList()
     }
 
     ReportDrawnWhen {
@@ -231,6 +249,26 @@ fun HomeScreen(
                     }
                 }
 
+                item(key = "recently_played_section") {
+                    RecentlyPlayedSection(
+                        songs = recentlyPlayedSongs,
+                        onSongClick = { song ->
+                            if (recentlyPlayedQueue.isNotEmpty()) {
+                                playerViewModel.playSongs(
+                                    songsToPlay = recentlyPlayedQueue,
+                                    startSong = song,
+                                    queueName = "Recently Played"
+                                )
+                            }
+                        },
+                        onOpenAllClick = {
+                            navController.navigate(Screen.RecentlyPlayed.route)
+                        },
+                        currentSongId = currentSong?.id,
+                        contentPadding = PaddingValues(start = 8.dp, end = 24.dp)
+                    )
+                }
+
                 item(key = "listening_stats_preview") {
                     StatsOverviewCard(
                         summary = weeklyStats,
@@ -306,6 +344,8 @@ fun YourMixHeader(
     val buttonCorners = 68.dp
     val colors = MaterialTheme.colorScheme
 
+    val titleStyle = rememberYourMixTitleStyle()
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -320,7 +360,7 @@ fun YourMixHeader(
             // Your Mix Title
             Text(
                 text = "Your\nMix",
-                style = ExpTitleTypography.displayLarge,
+                style = titleStyle,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
             )
@@ -464,4 +504,32 @@ fun SongListItemFavsWrapper(
         isCurrentSong = song.id == stablePlayerState.currentSong?.id,
         onClick = onClick
     )
+}
+
+
+@OptIn(ExperimentalTextApi::class)
+@Composable
+private fun rememberYourMixTitleStyle(): TextStyle {
+    return remember {
+        TextStyle(
+            fontFamily = FontFamily(
+                Font(
+                    resId = R.font.gflex_variable,
+                    variationSettings = FontVariation.Settings(
+                        FontVariation.weight(636),
+                        FontVariation.width(152f),
+                        //FontVariation.grade(40),
+                        FontVariation.Setting("ROND", 50f),
+                        FontVariation.Setting("XTRA", 520f),
+                        FontVariation.Setting("YOPQ", 90f),
+                        FontVariation.Setting("YTLC", 505f)
+                    )
+                )
+            ),
+            fontWeight = FontWeight(760),
+            fontSize = 64.sp,
+            lineHeight = 62.sp,
+//            letterSpacing = (-0.4).sp
+        )
+    }
 }

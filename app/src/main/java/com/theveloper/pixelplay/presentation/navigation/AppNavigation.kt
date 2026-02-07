@@ -43,6 +43,7 @@ import com.theveloper.pixelplay.presentation.screens.MashupScreen
 import com.theveloper.pixelplay.presentation.screens.NavBarCornerRadiusScreen
 import com.theveloper.pixelplay.presentation.screens.PaletteStyleSettingsScreen
 import com.theveloper.pixelplay.presentation.screens.PlaylistDetailScreen
+import com.theveloper.pixelplay.presentation.screens.RecentlyPlayedScreen
 
 import com.theveloper.pixelplay.presentation.screens.AboutScreen
 import com.theveloper.pixelplay.presentation.screens.SearchScreen
@@ -269,6 +270,20 @@ fun AppNavigation(
             ) {
                 ScreenWrapper(navController = navController) {
                     DailyMixScreen(
+                        playerViewModel = playerViewModel,
+                        navController = navController
+                    )
+                }
+            }
+            composable(
+                Screen.RecentlyPlayed.route,
+                enterTransition = { enterTransition() },
+                exitTransition = { exitTransition() },
+                popEnterTransition = { popEnterTransition() },
+                popExitTransition = { popExitTransition() },
+            ) {
+                ScreenWrapper(navController = navController) {
+                    RecentlyPlayedScreen(
                         playerViewModel = playerViewModel,
                         navController = navController
                     )

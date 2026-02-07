@@ -57,8 +57,14 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.util.UnstableApi
 import androidx.navigation.NavController
@@ -393,6 +399,8 @@ private fun ExpressiveDailyMixHeader(
         }
     }
 
+    val titleStyle = rememberDailyMixTitleStyle()
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -422,22 +430,13 @@ private fun ExpressiveDailyMixHeader(
                     }
                     val shape = threeShapeSwitch(index, thirdShapeCornerRadius = 30.dp)
 
-                    // --- INICIO DE LA CORRECCIÓN ---
                     if (index == 2) {
-                        // Para la 3ra imagen, usamos Modifier.layout para controlar la medición y el posicionamiento.
                         Box(
                             modifier = Modifier.layout { measurable, constraints ->
-                                // 1. Medimos el contenido (la imagen) para que sea un cuadrado perfecto de `size` x `size`,
-                                // ignorando las restricciones de ancho que puedan venir del padre (el Row).
                                 val placeable = measurable.measure(
                                     Constraints.fixed(width = size.roundToPx(), height = size.roundToPx())
                                 )
-
-                                // 2. Le decimos al Row que nuestro layout ocupará el ancho que él nos dio (`constraints.maxWidth`),
-                                // de esta forma no empujamos a los otros elementos. La altura será la de nuestro cuadrado.
                                 layout(constraints.maxWidth, placeable.height) {
-                                    // 3. Colocamos nuestro contenido cuadrado (`placeable`) dentro del espacio asignado.
-                                    // Lo centramos horizontalmente para que se desborde por ambos lados si es necesario.
                                     val xOffset = (constraints.maxWidth - placeable.width) / 2
                                     placeable.placeRelative(xOffset, 0)
                                 }
@@ -453,12 +452,11 @@ private fun ExpressiveDailyMixHeader(
                                     model = artUrl ?: R.drawable.rounded_album_24,
                                     contentDescription = null,
                                     contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize() // Llena el tamaño cuadrado que le dimos.
+                                    modifier = Modifier.fillMaxSize()
                                 )
                             }
                         }
                     } else {
-                        // Lógica original para las otras dos imágenes
                         Box(
                             modifier = Modifier
                                 .size(size)
@@ -473,7 +471,6 @@ private fun ExpressiveDailyMixHeader(
                             )
                         }
                     }
-                    // --- FIN DE LA CORRECCIÓN ---
                 }
             }
         }
@@ -509,11 +506,15 @@ private fun ExpressiveDailyMixHeader(
                 horizontalAlignment = Alignment.Start
             ) {
                 Text(
-                    text = "Daily Mix", style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface
+                    text = "Daily Mix",
+//                    style = MaterialTheme.typography.headlineLarge,
+                    style = titleStyle,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
+                    modifier = Modifier.padding(start = 3.dp),
                     text = "${songs.size} Songs • ${formatDuration(totalDuration)}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
@@ -537,4 +538,31 @@ private fun ExpressiveDailyMixHeader(
         }
     }
     Trace.endSection()
+}
+
+@OptIn(ExperimentalTextApi::class)
+@Composable
+private fun rememberDailyMixTitleStyle(): TextStyle {
+    return remember {
+        TextStyle(
+            fontFamily = FontFamily(
+                Font(
+                    resId = R.font.gflex_variable,
+                    variationSettings = FontVariation.Settings(
+                        FontVariation.weight(436),
+                        FontVariation.width(102f),
+                        //FontVariation.grade(40),
+                        FontVariation.Setting("ROND", 100f),
+                        FontVariation.Setting("XTRA", 520f),
+                        FontVariation.Setting("YOPQ", 90f),
+                        FontVariation.Setting("YTLC", 505f)
+                    )
+                )
+            ),
+            fontWeight = FontWeight(760),
+            fontSize = 44.sp,
+            //lineHeight = 62.sp,
+//            letterSpacing = (-0.4).sp
+        )
+    }
 }
