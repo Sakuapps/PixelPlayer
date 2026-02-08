@@ -1,5 +1,8 @@
 *.iml
 .gradle
+.gradle-local/
+.gradle-temp/
+.kotlin/
 /local.properties
 /.idea/caches
 /.idea/libraries
@@ -12,6 +15,9 @@
 /captures
 .externalNativeBuild
 .cxx
+app/release/
+benchmark-results/
+hs_err_pid*.log
 local.properties
 misc.xml
 markdown.xml
