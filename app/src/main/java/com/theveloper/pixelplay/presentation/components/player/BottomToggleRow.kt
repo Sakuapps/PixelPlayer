@@ -55,7 +55,7 @@ fun BottomToggleRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(10.dp)
+                .padding(8.dp)
                 .clip(
                     AbsoluteSmoothCornerShape(
                         cornerRadiusBL = rowCorners,

@@ -132,7 +132,9 @@ constructor(
         val FULL_PLAYER_DELAY_CONTROLS = booleanPreferencesKey("full_player_delay_controls")
         val FULL_PLAYER_PLACEHOLDERS = booleanPreferencesKey("full_player_placeholders")
         val FULL_PLAYER_PLACEHOLDER_TRANSPARENT = booleanPreferencesKey("full_player_placeholder_transparent")
+        val FULL_PLAYER_PLACEHOLDERS_ON_CLOSE = booleanPreferencesKey("full_player_placeholders_on_close")
         val FULL_PLAYER_DELAY_THRESHOLD = intPreferencesKey("full_player_delay_threshold_percent")
+        val FULL_PLAYER_CLOSE_THRESHOLD = intPreferencesKey("full_player_close_threshold_percent")
 
         // Multi-Artist Settings
         val ARTIST_DELIMITERS = stringPreferencesKey("artist_delimiters")
@@ -730,7 +732,9 @@ constructor(
                 delayControls = delayControls,
                 showPlaceholders = preferences[PreferencesKeys.FULL_PLAYER_PLACEHOLDERS] ?: false,
                 transparentPlaceholders = preferences[PreferencesKeys.FULL_PLAYER_PLACEHOLDER_TRANSPARENT] ?: false,
-                contentAppearThresholdPercent = preferences[PreferencesKeys.FULL_PLAYER_DELAY_THRESHOLD] ?: 100
+                applyPlaceholdersOnClose = preferences[PreferencesKeys.FULL_PLAYER_PLACEHOLDERS_ON_CLOSE] ?: true,
+                contentAppearThresholdPercent = preferences[PreferencesKeys.FULL_PLAYER_DELAY_THRESHOLD] ?: 100,
+                contentCloseThresholdPercent = preferences[PreferencesKeys.FULL_PLAYER_CLOSE_THRESHOLD] ?: 0
             )
         }
 
@@ -1363,10 +1367,23 @@ constructor(
         }
     }
 
+    suspend fun setFullPlayerPlaceholdersOnClose(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.FULL_PLAYER_PLACEHOLDERS_ON_CLOSE] = enabled
+        }
+    }
+
     suspend fun setFullPlayerAppearThreshold(thresholdPercent: Int) {
         val coercedValue = thresholdPercent.coerceIn(50, 100)
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.FULL_PLAYER_DELAY_THRESHOLD] = coercedValue
+        }
+    }
+
+    suspend fun setFullPlayerCloseThreshold(thresholdPercent: Int) {
+        val coercedValue = thresholdPercent.coerceIn(0, 100)
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.FULL_PLAYER_CLOSE_THRESHOLD] = coercedValue
         }
     }
 

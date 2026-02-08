@@ -495,9 +495,21 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun setFullPlayerPlaceholdersOnClose(enabled: Boolean) {
+        viewModelScope.launch {
+            userPreferencesRepository.setFullPlayerPlaceholdersOnClose(enabled)
+        }
+    }
+
     fun setFullPlayerAppearThreshold(thresholdPercent: Int) {
         viewModelScope.launch {
             userPreferencesRepository.setFullPlayerAppearThreshold(thresholdPercent)
+        }
+    }
+
+    fun setFullPlayerCloseThreshold(thresholdPercent: Int) {
+        viewModelScope.launch {
+            userPreferencesRepository.setFullPlayerCloseThreshold(thresholdPercent)
         }
     }
 

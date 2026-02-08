@@ -8,7 +8,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -331,15 +330,34 @@ fun FullPlayerContent(
             DelayedContent(
                 shouldDelay = shouldDelay,
                 showPlaceholders = loadingTweaks.showPlaceholders,
+                applyPlaceholderDelayOnClose = loadingTweaks.applyPlaceholdersOnClose,
+                sharedBoundsModifier = Modifier.fillMaxWidth().height(carouselHeight),
                 expansionFractionProvider = expansionFractionProvider,
                 isExpandedOverride = currentSheetState == PlayerSheetState.EXPANDED,
                 normalStartThreshold = 0.08f,
                 delayAppearThreshold = loadingTweaks.contentAppearThresholdPercent / 100f,
+                delayCloseThreshold = 1f - (loadingTweaks.contentCloseThresholdPercent / 100f),
                 placeholder = {
                     if (loadingTweaks.transparentPlaceholders) {
-                        Box(Modifier.height(carouselHeight).fillMaxWidth())
+                        Box(
+                            Modifier
+                                .height(carouselHeight)
+                                .fillMaxWidth()
+                                .graphicsLayer {
+                                    scaleX = albumArtScale
+                                    scaleY = albumArtScale
+                                }
+                        )
                     } else {
-                        AlbumPlaceholder(height = carouselHeight, placeholderColor, placeholderOnColor)
+                        AlbumPlaceholder(
+                            height = carouselHeight,
+                            color = placeholderColor,
+                            onColor = placeholderOnColor,
+                            modifier = Modifier.graphicsLayer {
+                                scaleX = albumArtScale
+                                scaleY = albumArtScale
+                            }
+                        )
                     }
                 }
             ) {
@@ -376,10 +394,13 @@ fun FullPlayerContent(
         DelayedContent(
             shouldDelay = shouldDelay,
             showPlaceholders = loadingTweaks.showPlaceholders,
+            applyPlaceholderDelayOnClose = loadingTweaks.applyPlaceholdersOnClose,
+            sharedBoundsModifier = Modifier.fillMaxWidth().height(174.dp),
             expansionFractionProvider = expansionFractionProvider,
             isExpandedOverride = currentSheetState == PlayerSheetState.EXPANDED,
             normalStartThreshold = 0.42f,
             delayAppearThreshold = loadingTweaks.contentAppearThresholdPercent / 100f,
+            delayCloseThreshold = 1f - (loadingTweaks.contentCloseThresholdPercent / 100f),
             placeholder = {
                 if (loadingTweaks.transparentPlaceholders) {
                     Box(Modifier.fillMaxWidth().height(174.dp))
@@ -460,15 +481,23 @@ fun FullPlayerContent(
         DelayedContent(
             shouldDelay = shouldDelay,
             showPlaceholders = loadingTweaks.showPlaceholders,
+            applyPlaceholderDelayOnClose = loadingTweaks.applyPlaceholdersOnClose,
+            sharedBoundsModifier = Modifier.fillMaxWidth().heightIn(min = 70.dp),
             expansionFractionProvider = expansionFractionProvider,
             isExpandedOverride = currentSheetState == PlayerSheetState.EXPANDED,
             normalStartThreshold = 0.20f,
             delayAppearThreshold = loadingTweaks.contentAppearThresholdPercent / 100f,
+            delayCloseThreshold = 1f - (loadingTweaks.contentCloseThresholdPercent / 100f),
             placeholder = {
                 if (loadingTweaks.transparentPlaceholders) {
                     Box(Modifier.fillMaxWidth().height(70.dp))
                 } else {
-                    MetadataPlaceholder(expansionFractionProvider(), placeholderColor, placeholderOnColor)
+                    MetadataPlaceholder(
+                        expansionFraction = expansionFractionProvider(),
+                        color = placeholderColor,
+                        onColor = placeholderOnColor,
+                        showQueueButtons = isLandscape
+                    )
                 }
             }
         ) {
@@ -1195,15 +1224,23 @@ private fun PlayerProgressBarSection(
     DelayedContent(
         shouldDelay = shouldDelay,
         showPlaceholders = loadingTweaks?.showPlaceholders ?: false,
+        applyPlaceholderDelayOnClose = loadingTweaks?.applyPlaceholdersOnClose ?: true,
+        sharedBoundsModifier = Modifier.fillMaxWidth().heightIn(min = 70.dp),
         expansionFractionProvider = expansionFractionProvider,
         isExpandedOverride = currentSheetState == PlayerSheetState.EXPANDED,
         normalStartThreshold = 0.08f,
         delayAppearThreshold = (loadingTweaks?.contentAppearThresholdPercent ?: 100) / 100f,
+        delayCloseThreshold = 1f - ((loadingTweaks?.contentCloseThresholdPercent ?: 0) / 100f),
         placeholder = {
              if (loadingTweaks?.transparentPlaceholders == true) {
                  Box(Modifier.fillMaxWidth().heightIn(min = 70.dp))
              } else {
-                 ProgressPlaceholder(expansionFraction, placeholderColor, placeholderOnColor)
+                 ProgressPlaceholder(
+                     expansionFraction = expansionFraction,
+                     color = placeholderColor,
+                     onColor = placeholderOnColor,
+                     showAudioMetaChip = !displayAudioMetaLabel.isNullOrBlank()
+                 )
              }
         }
     ) {
@@ -1340,61 +1377,123 @@ private fun EfficientTimeLabels(
 private fun DelayedContent(
     shouldDelay: Boolean,
     showPlaceholders: Boolean,
+    applyPlaceholderDelayOnClose: Boolean,
+    sharedBoundsModifier: Modifier = Modifier,
     expansionFractionProvider: () -> Float,
     isExpandedOverride: Boolean = false,
     normalStartThreshold: Float,
     delayAppearThreshold: Float,
+    delayCloseThreshold: Float,
     placeholder: @Composable () -> Unit,
     content: @Composable () -> Unit
 ) {
-    // Some carousel styles (e.g., one-peek) can leave the sheet fraction just shy of 1f when reopening
-    // the player, which kept delayed sections stuck on placeholders. Treat near-complete expansion as
-    // fully expanded to ensure content becomes visible without needing an extra interaction.
-    val expansionFraction by remember {
+    val rawExpansionFraction by remember {
         derivedStateOf {
-            val raw = expansionFractionProvider().coerceIn(0f, 1f)
-            if (isExpandedOverride) 1f else raw
+            expansionFractionProvider().coerceIn(0f, 1f)
         }
     }
-    val easedExpansionFraction by remember {
-        derivedStateOf { if (expansionFraction >= 0.985f || isExpandedOverride) 1f else expansionFraction }
+    // Some carousel styles can leave the fraction just shy of 1f at rest.
+    val effectiveExpansionFraction by remember {
+        derivedStateOf {
+            if (isExpandedOverride && rawExpansionFraction >= 0.985f) 1f else rawExpansionFraction
+        }
+    }
+    var previousExpansionFraction by remember { mutableStateOf(rawExpansionFraction) }
+    var previousExpandedOverride by remember { mutableStateOf(isExpandedOverride) }
+    val isCollapsingByFraction = rawExpansionFraction < previousExpansionFraction - 0.001f
+    val isExpandingByFraction = rawExpansionFraction > previousExpansionFraction + 0.001f
+    val justStartedCollapsing = previousExpandedOverride && !isExpandedOverride
+    val justStartedExpanding = !previousExpandedOverride && isExpandedOverride
+    val isCollapsing = isCollapsingByFraction || justStartedCollapsing
+    val isExpanding = isExpandingByFraction || justStartedExpanding
+
+    LaunchedEffect(rawExpansionFraction, isExpandedOverride) {
+        previousExpansionFraction = rawExpansionFraction
+        previousExpandedOverride = isExpandedOverride
     }
 
-    val isDelayGateOpen by remember(shouldDelay, delayAppearThreshold, isExpandedOverride) {
-        derivedStateOf {
-            !shouldDelay || isExpandedOverride || easedExpansionFraction >= delayAppearThreshold.coerceIn(0f, 1f)
+    val appearThreshold = delayAppearThreshold.coerceIn(0f, 1f)
+    val closeThreshold = delayCloseThreshold.coerceIn(0f, 1f)
+    var isDelayGateOpen by remember(shouldDelay) { mutableStateOf(!shouldDelay) }
+
+    LaunchedEffect(
+        shouldDelay,
+        appearThreshold,
+        closeThreshold,
+        effectiveExpansionFraction,
+        applyPlaceholderDelayOnClose,
+        isCollapsing,
+        isExpanding,
+        isExpandedOverride
+    ) {
+        if (!shouldDelay) {
+            isDelayGateOpen = true
+            return@LaunchedEffect
+        }
+
+        if (effectiveExpansionFraction <= 0.001f) {
+            isDelayGateOpen = false
+            return@LaunchedEffect
+        }
+
+        if (isDelayGateOpen) {
+            if (applyPlaceholderDelayOnClose && isCollapsing && effectiveExpansionFraction <= closeThreshold) {
+                isDelayGateOpen = false
+            }
+        } else if (
+            effectiveExpansionFraction >= appearThreshold &&
+                (!applyPlaceholderDelayOnClose || isExpanding || isExpandedOverride)
+        ) {
+            isDelayGateOpen = true
         }
     }
 
-    val baseAlpha by remember(normalStartThreshold, isExpandedOverride) {
+    val baseAlpha by remember(normalStartThreshold, effectiveExpansionFraction) {
         derivedStateOf {
-            val effectiveFraction = if (isExpandedOverride) 1f else easedExpansionFraction
-            ((effectiveFraction - normalStartThreshold) / (1f - normalStartThreshold)).coerceIn(0f, 1f)
+            ((effectiveExpansionFraction - normalStartThreshold) / (1f - normalStartThreshold))
+                .coerceIn(0f, 1f)
         }
     }
+    val contentBlendAlpha by animateFloatAsState(
+        targetValue = if (isDelayGateOpen) 1f else 0f,
+        animationSpec = if (isDelayGateOpen) {
+            tween(durationMillis = 260, easing = FastOutSlowInEasing)
+        } else {
+            tween(durationMillis = 140, easing = FastOutSlowInEasing)
+        },
+        label = "DelayedContentBlendAlpha"
+    )
+    val placeholderBlendAlpha by animateFloatAsState(
+        targetValue = if (isDelayGateOpen) 0f else 1f,
+        animationSpec = if (isDelayGateOpen) {
+            tween(durationMillis = 360, easing = FastOutSlowInEasing)
+        } else {
+            tween(durationMillis = 140, easing = FastOutSlowInEasing)
+        },
+        label = "DelayedPlaceholderBlendAlpha"
+    )
 
     if (shouldDelay) {
-        Crossfade(
-            targetState = isDelayGateOpen,
-            label = "DelayedContentCrossfade"
-        ) { gateOpen ->
-            if (gateOpen) {
+        Box(modifier = sharedBoundsModifier) {
+            val effectiveContentAlpha = (contentBlendAlpha * baseAlpha).coerceIn(0f, 1f)
+            if (effectiveContentAlpha > 0.001f) {
                 Box(
-                    modifier = Modifier.graphicsLayer {
-                        alpha = baseAlpha
-                    }
+                    modifier = Modifier.graphicsLayer { alpha = effectiveContentAlpha }
                 ) {
                     content()
                 }
-            } else if (showPlaceholders) {
-                placeholder()
+            }
+            if (showPlaceholders && placeholderBlendAlpha > 0.001f) {
+                Box(
+                    modifier = Modifier.graphicsLayer { alpha = placeholderBlendAlpha }
+                ) {
+                    placeholder()
+                }
             }
         }
     } else {
         Box(
-            modifier = Modifier.graphicsLayer {
-                alpha = baseAlpha
-            }
+            modifier = sharedBoundsModifier.graphicsLayer { alpha = baseAlpha }
         ) {
             content()
         }
@@ -1507,9 +1606,14 @@ private fun PlaceholderBox(
 }
 
 @Composable
-private fun AlbumPlaceholder(height: Dp, color: Color, onColor: Color) {
+private fun AlbumPlaceholder(
+    height: Dp,
+    color: Color,
+    onColor: Color,
+    modifier: Modifier = Modifier
+) {
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(height),
         shape = RoundedCornerShape(18.dp),
@@ -1528,125 +1632,254 @@ private fun AlbumPlaceholder(height: Dp, color: Color, onColor: Color) {
 }
 
 @Composable
-private fun MetadataPlaceholder(expansionFraction: Float, color: Color, onColor: Color) {
+private fun MetadataPlaceholder(
+    expansionFraction: Float,
+    color: Color,
+    onColor: Color,
+    showQueueButtons: Boolean
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 70.dp)
-            // Removed vertical padding lerp to match real content's 70dp heightIn exactly
-            .padding(start = 4.dp, end = 4.dp),
+            .graphicsLayer {
+                alpha = expansionFraction.coerceIn(0f, 1f)
+                translationY = (1f - expansionFraction.coerceIn(0f, 1f)) * 24f
+            },
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Column(
             modifier = Modifier
-                .weight(0.85f)
-                .fillMaxWidth(0.9f)
+                .weight(1f)
                 .align(Alignment.CenterVertically),
-            verticalArrangement = Arrangement.spacedBy(10.dp) // Adjusted spacing to match visual density
+            verticalArrangement = Arrangement.spacedBy(6.dp) //2.dp
         ) {
             PlaceholderBox(
                 modifier = Modifier
-                    .fillMaxWidth(0.7f) // Simulate title length
-                    .height(24.dp),
-                cornerRadius = 4.dp,
+                    .fillMaxWidth(0.72f)
+                    .height(27.dp), //30.dp
+                cornerRadius = 8.dp,
                 color = color
             )
             PlaceholderBox(
                 modifier = Modifier
-                    .fillMaxWidth(0.4f) // Simulate artist length
-                    .height(16.dp),
-                cornerRadius = 4.dp,
+                    .fillMaxWidth(0.46f)
+                    .height(17.dp), //20.dp
+                cornerRadius = 8.dp,
                 color = onColor
             )
         }
-        Spacer(modifier = Modifier.width(8.dp))
-        PlaceholderBox(
-            modifier = Modifier
-                .size(42.dp),
-            cornerRadius = 50.dp,
-            color = onColor
-        )
+
+        if (showQueueButtons) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    modifier = Modifier.size(height = 42.dp, width = 50.dp),
+                    shape = RoundedCornerShape(
+                        topStart = 50.dp,
+                        topEnd = 6.dp,
+                        bottomStart = 50.dp,
+                        bottomEnd = 6.dp
+                    ),
+                    color = onColor,
+                    tonalElevation = 0.dp
+                ) {}
+                Surface(
+                    modifier = Modifier.size(height = 42.dp, width = 50.dp),
+                    shape = RoundedCornerShape(
+                        topStart = 6.dp,
+                        topEnd = 50.dp,
+                        bottomStart = 6.dp,
+                        bottomEnd = 50.dp
+                    ),
+                    color = onColor,
+                    tonalElevation = 0.dp
+                ) {}
+            }
+        } else {
+            PlaceholderBox(
+                modifier = Modifier.size(width = 48.dp, height = 48.dp),
+                cornerRadius = 24.dp,
+                color = onColor
+            )
+        }
     }
 }
 
 @Composable
-private fun ProgressPlaceholder(expansionFraction: Float, color: Color, onColor: Color) {
+private fun ProgressPlaceholder(
+    expansionFraction: Float,
+    color: Color,
+    onColor: Color,
+    showAudioMetaChip: Boolean
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .graphicsLayer { alpha = expansionFraction }
-            .heightIn(min = 70.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .heightIn(min = 70.dp)
+            .padding(vertical = lerp(2.dp, 0.dp, expansionFraction.coerceIn(0f, 1f))),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp)
+                .padding(vertical = 8.dp),
+            contentAlignment = Alignment.CenterStart
         ) {
             PlaceholderBox(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(6.dp), // Match WavySlider track height
+                    .height(6.dp),
+                cornerRadius = 3.dp,
+                color = onColor.copy(alpha = 0.15f)
+            )
+            // Keep active segment in the layout tree but invisible to avoid visual noise.
+            PlaceholderBox(
+                modifier = Modifier
+                    .fillMaxWidth(0.34f)
+                    .height(6.dp)
+                    .graphicsLayer { alpha = 0f },
                 cornerRadius = 3.dp,
                 color = color
             )
+            // Keep thumb slot aligned but fully transparent.
+            PlaceholderBox(
+                modifier = Modifier
+                    .padding(start = 92.dp)
+                    .size(14.dp)
+                    .graphicsLayer { alpha = 0f },
+                cornerRadius = 7.dp,
+                color = onColor
+            )
         }
-        Row(
+
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(horizontal = 4.dp)
         ) {
-            PlaceholderBox(modifier = Modifier.width(30.dp).height(12.dp), cornerRadius = 2.dp, color = onColor)
-            PlaceholderBox(modifier = Modifier.width(30.dp).height(12.dp), cornerRadius = 2.dp, color = onColor)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                PlaceholderBox(
+                    modifier = Modifier
+                        .width(34.dp)
+                        .height(12.dp),
+                    cornerRadius = 2.dp,
+                    color = onColor
+                )
+                PlaceholderBox(
+                    modifier = Modifier
+                        .width(34.dp)
+                        .height(12.dp),
+                    cornerRadius = 2.dp,
+                    color = onColor
+                )
+            }
+
+            if (showAudioMetaChip) {
+                PlaceholderBox(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .widthIn(min = 96.dp, max = 180.dp)
+                        .height(18.dp),
+                    cornerRadius = 999.dp,
+                    color = onColor.copy(alpha = 0.15f)
+                )
+            }
         }
     }
 }
 
 @Composable
 private fun ControlsPlaceholder(color: Color, onColor: Color) {
-    Box(
-        modifier = Modifier.fillMaxWidth()
+    val rowCorners = 60.dp
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Box(
+            modifier = Modifier
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .fillMaxWidth()
+                .height(80.dp)
         ) {
-            // Main Controls Row
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                PlaceholderBox(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    cornerRadius = 60.dp,
+                    color = onColor
+                )
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    shape = AbsoluteSmoothCornerShape(
+                        cornerRadiusTL = rowCorners,
+                        smoothnessAsPercentTR = 60,
+                        cornerRadiusBL = rowCorners,
+                        smoothnessAsPercentTL = 60,
+                        cornerRadiusTR = rowCorners,
+                        smoothnessAsPercentBL = 60,
+                        cornerRadiusBR = rowCorners,
+                        smoothnessAsPercentBR = 60
+                    ),
+                    color = color,
+                    tonalElevation = 0.dp
+                ) {}
+                PlaceholderBox(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    cornerRadius = 60.dp,
+                    color = onColor
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 58.dp, max = 78.dp)
+                .padding(horizontal = 26.dp)
+                .padding(bottom = 6.dp)
+                .background(
+                    color = onColor.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(rowCorners)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(80.dp)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                    .padding(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                 // 5 buttons: Prev, Play/Pause, Next + 2 smaller extras
-                 // Size order: 42, 42, 64, 42, 42
-                 val sizes = listOf(74.dp, 74.dp, 74.dp)
-                 sizes.forEach { size ->
-                     PlaceholderBox(
-                         modifier = Modifier.size(size),
-                         cornerRadius = size / 2, // Circle
-                         color = if (size == 64.dp) color else onColor
-                     )
-                 }
+                repeat(3) {
+                    PlaceholderBox(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        cornerRadius = rowCorners,
+                        color = onColor.copy(alpha = 0.1f)
+                    )
+                }
             }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Toggles Row
-            PlaceholderBox(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(60.dp) // Avg between min 58 and max 78
-                    .padding(horizontal = 26.dp)
-                    .padding(bottom = 6.dp),
-                cornerRadius = 30.dp,
-                color = onColor
-            )
         }
     }
 }
@@ -1685,7 +1918,7 @@ private fun BottomToggleRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(10.dp)
+                .padding(6.dp)
                 .clip(
                     AbsoluteSmoothCornerShape(
                         cornerRadiusBL = rowCorners,
@@ -1699,7 +1932,7 @@ private fun BottomToggleRow(
                     )
                 )
                 .background(Color.Transparent),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             val commonModifier = Modifier.weight(1f)
