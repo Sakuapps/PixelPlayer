@@ -135,6 +135,7 @@ constructor(
         val FULL_PLAYER_PLACEHOLDERS_ON_CLOSE = booleanPreferencesKey("full_player_placeholders_on_close")
         val FULL_PLAYER_DELAY_THRESHOLD = intPreferencesKey("full_player_delay_threshold_percent")
         val FULL_PLAYER_CLOSE_THRESHOLD = intPreferencesKey("full_player_close_threshold_percent")
+        val USE_PLAYER_SHEET_V2 = booleanPreferencesKey("use_player_sheet_v2")
 
         // Multi-Artist Settings
         val ARTIST_DELIMITERS = stringPreferencesKey("artist_delimiters")
@@ -736,6 +737,11 @@ constructor(
                 contentAppearThresholdPercent = preferences[PreferencesKeys.FULL_PLAYER_DELAY_THRESHOLD] ?: 0,
                 contentCloseThresholdPercent = preferences[PreferencesKeys.FULL_PLAYER_CLOSE_THRESHOLD] ?: 0
             )
+        }
+
+    val usePlayerSheetV2Flow: Flow<Boolean> = dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.USE_PLAYER_SHEET_V2] ?: false
         }
 
     val favoriteSongIdsFlow: Flow<Set<String>> =
@@ -1384,6 +1390,12 @@ constructor(
         val coercedValue = thresholdPercent.coerceIn(0, 100)
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.FULL_PLAYER_CLOSE_THRESHOLD] = coercedValue
+        }
+    }
+
+    suspend fun setUsePlayerSheetV2(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.USE_PLAYER_SHEET_V2] = enabled
         }
     }
 

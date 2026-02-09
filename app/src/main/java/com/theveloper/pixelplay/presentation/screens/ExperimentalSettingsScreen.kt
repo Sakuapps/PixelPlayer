@@ -204,6 +204,20 @@ fun ExperimentalSettingsScreen(
                             }
 
                             SwitchSettingItem(
+                                title = "Use Player Sheet V2",
+                                subtitle = "Routes player UI through the new rewrite host. Keep disabled if you notice regressions.",
+                                checked = uiState.usePlayerSheetV2,
+                                onCheckedChange = settingsViewModel::setUsePlayerSheetV2,
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Rounded.ViewCarousel,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.secondary
+                                    )
+                                }
+                            )
+
+                            SwitchSettingItem(
                                 title = "Delay everything",
                                 subtitle = "Hold the full player content until the sheet background is fully expanded.",
                                 checked = delayAllEnabled,

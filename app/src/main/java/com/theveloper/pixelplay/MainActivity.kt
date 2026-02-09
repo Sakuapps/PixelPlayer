@@ -62,6 +62,7 @@ import com.theveloper.pixelplay.data.service.MusicService
 import com.theveloper.pixelplay.presentation.components.MiniPlayerHeight
 import com.theveloper.pixelplay.presentation.components.NavBarContentHeight
 import com.theveloper.pixelplay.presentation.components.UnifiedPlayerSheet
+import com.theveloper.pixelplay.presentation.components.UnifiedPlayerSheetV2
 import com.theveloper.pixelplay.presentation.navigation.AppNavigation
 import com.theveloper.pixelplay.presentation.navigation.Screen
 import com.theveloper.pixelplay.presentation.screens.SetupScreen
@@ -688,6 +689,7 @@ class MainActivity : ComponentActivity() {
                         val containerHeight = this.maxHeight
 
                         val stablePlayerState by playerViewModel.stablePlayerState.collectAsState()
+                        val usePlayerSheetV2 by userPreferencesRepository.usePlayerSheetV2Flow.collectAsState(initial = false)
                         val showPlayerContentInitially = stablePlayerState.currentSong != null
 
                         val routesWithHiddenMiniPlayer = remember { setOf(Screen.NavBarCrRad.route) }
@@ -712,15 +714,27 @@ class MainActivity : ComponentActivity() {
                             onOpenSidebar = { scope.launch { drawerState.open() } }
                         )
 
-                        UnifiedPlayerSheet(
-                            playerViewModel = playerViewModel,
-                            sheetCollapsedTargetY = sheetCollapsedTargetY,
-                            collapsedStateHorizontalPadding = horizontalPadding,
-                            hideMiniPlayer = shouldHideMiniPlayer,
-                            containerHeight = containerHeight,
-                            navController = navController,
-                            isNavBarHidden = shouldHideNavigationBar
-                        )
+                        if (usePlayerSheetV2) {
+                            UnifiedPlayerSheetV2(
+                                playerViewModel = playerViewModel,
+                                sheetCollapsedTargetY = sheetCollapsedTargetY,
+                                collapsedStateHorizontalPadding = horizontalPadding,
+                                hideMiniPlayer = shouldHideMiniPlayer,
+                                containerHeight = containerHeight,
+                                navController = navController,
+                                isNavBarHidden = shouldHideNavigationBar
+                            )
+                        } else {
+                            UnifiedPlayerSheet(
+                                playerViewModel = playerViewModel,
+                                sheetCollapsedTargetY = sheetCollapsedTargetY,
+                                collapsedStateHorizontalPadding = horizontalPadding,
+                                hideMiniPlayer = shouldHideMiniPlayer,
+                                containerHeight = containerHeight,
+                                navController = navController,
+                                isNavBarHidden = shouldHideNavigationBar
+                            )
+                        }
 
                         val playerUiState by playerViewModel.playerUiState.collectAsState()
 

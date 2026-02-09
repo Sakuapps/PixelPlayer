@@ -61,6 +61,7 @@ data class SettingsUiState(
     val modelsFetchError: String? = null,
     val appRebrandDialogShown: Boolean = false,
     val fullPlayerLoadingTweaks: FullPlayerLoadingTweaks = FullPlayerLoadingTweaks(),
+    val usePlayerSheetV2: Boolean = false,
     // Developer Options
     val albumArtQuality: AlbumArtQuality = AlbumArtQuality.MEDIUM,
     val tapBackgroundClosesPlayer: Boolean = true,
@@ -282,6 +283,12 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             userPreferencesRepository.fullPlayerLoadingTweaksFlow.collect { tweaks ->
                 _uiState.update { it.copy(fullPlayerLoadingTweaks = tweaks) }
+            }
+        }
+
+        viewModelScope.launch {
+            userPreferencesRepository.usePlayerSheetV2Flow.collect { enabled ->
+                _uiState.update { it.copy(usePlayerSheetV2 = enabled) }
             }
         }
 
@@ -510,6 +517,12 @@ class SettingsViewModel @Inject constructor(
     fun setFullPlayerCloseThreshold(thresholdPercent: Int) {
         viewModelScope.launch {
             userPreferencesRepository.setFullPlayerCloseThreshold(thresholdPercent)
+        }
+    }
+
+    fun setUsePlayerSheetV2(enabled: Boolean) {
+        viewModelScope.launch {
+            userPreferencesRepository.setUsePlayerSheetV2(enabled)
         }
     }
 
