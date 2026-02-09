@@ -27,6 +27,17 @@ import com.theveloper.pixelplay.presentation.viewmodel.PlayerViewModel
  * - gesture math/dismiss handlers extracted to scoped controllers
  * - vertical drag pointer input moved to playerSheetVerticalDragGesture modifier
  * - horizontal dismiss pointer input moved to miniPlayerDismissHorizontalGesture modifier
+ * - queue sheet open/drag/snap logic moved to QueueSheetController
+ * - predictive back lifecycle moved to PlayerSheetPredictiveBackHandler
+ * - sheet visual derived state moved to rememberSheetVisualState
+ * - album-theme + mini-appearance visual state moved to rememberSheetThemeState
+ * - shape + vertical drag interaction state moved to rememberSheetInteractionState
+ * - overlay/IME/scrim derived state moved to rememberSheetOverlayState
+ * - save-queue + song-info modal state moved to rememberSheetModalOverlayController
+ * - queue runtime effects moved to QueueSheetRuntimeEffects
+ * - queue state/controller derivation moved to rememberQueueSheetState
+ * - mini dismiss handler creation moved to rememberMiniPlayerDismissGestureHandler
+ * - drag/back state derivation moved to rememberSheetBackAndDragState
  */
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable

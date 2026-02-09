@@ -7,6 +7,9 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -116,6 +119,28 @@ internal class MiniPlayerDismissGestureHandler(
                 )
             }
         }
+    }
+}
+
+@Composable
+internal fun rememberMiniPlayerDismissGestureHandler(
+    scope: CoroutineScope,
+    density: Density,
+    hapticFeedback: HapticFeedback,
+    offsetAnimatable: Animatable<Float, AnimationVector1D>,
+    screenWidthPx: Float,
+    onDismissPlaylistAndShowUndo: () -> Unit
+): MiniPlayerDismissGestureHandler {
+    val onDismissPlaylistAndShowUndoState = rememberUpdatedState(onDismissPlaylistAndShowUndo)
+    return remember(scope, density, hapticFeedback, offsetAnimatable, screenWidthPx) {
+        MiniPlayerDismissGestureHandler(
+            scope = scope,
+            density = density,
+            hapticFeedback = hapticFeedback,
+            offsetAnimatable = offsetAnimatable,
+            screenWidthPx = screenWidthPx,
+            onDismissPlaylistAndShowUndo = { onDismissPlaylistAndShowUndoState.value() }
+        )
     }
 }
 

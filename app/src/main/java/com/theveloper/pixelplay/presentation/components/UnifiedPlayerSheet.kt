@@ -4,13 +4,10 @@ package com.theveloper.pixelplay.presentation.components
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.PredictiveBackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDp
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -30,7 +27,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -58,9 +54,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import com.theveloper.pixelplay.ui.theme.LocalPixelPlayDarkTheme
 import androidx.compose.ui.Alignment
@@ -95,14 +89,19 @@ import androidx.navigation.NavHostController
 import coil.size.Size
 import com.theveloper.pixelplay.R
 import com.theveloper.pixelplay.data.model.Song
-import com.theveloper.pixelplay.data.preferences.NavBarStyle
-import com.theveloper.pixelplay.data.preferences.ThemePreference
-import com.theveloper.pixelplay.presentation.components.scoped.MiniPlayerDismissGestureHandler
+import com.theveloper.pixelplay.presentation.components.scoped.PlayerSheetPredictiveBackHandler
+import com.theveloper.pixelplay.presentation.components.scoped.QueueSheetRuntimeEffects
 import com.theveloper.pixelplay.presentation.components.scoped.miniPlayerDismissHorizontalGesture
 import com.theveloper.pixelplay.presentation.components.scoped.playerSheetVerticalDragGesture
-import com.theveloper.pixelplay.presentation.components.scoped.rememberExpansionTransition
+import com.theveloper.pixelplay.presentation.components.scoped.rememberMiniPlayerDismissGestureHandler
+import com.theveloper.pixelplay.presentation.components.scoped.rememberQueueSheetState
+import com.theveloper.pixelplay.presentation.components.scoped.rememberSheetBackAndDragState
+import com.theveloper.pixelplay.presentation.components.scoped.rememberSheetInteractionState
+import com.theveloper.pixelplay.presentation.components.scoped.rememberSheetModalOverlayController
+import com.theveloper.pixelplay.presentation.components.scoped.rememberSheetOverlayState
+import com.theveloper.pixelplay.presentation.components.scoped.rememberSheetThemeState
+import com.theveloper.pixelplay.presentation.components.scoped.rememberSheetVisualState
 import com.theveloper.pixelplay.presentation.components.scoped.SheetMotionController
-import com.theveloper.pixelplay.presentation.components.scoped.SheetVerticalDragGestureHandler
 import com.theveloper.pixelplay.presentation.navigation.Screen
 import com.theveloper.pixelplay.presentation.viewmodel.PlayerSheetState
 import com.theveloper.pixelplay.presentation.viewmodel.PlayerViewModel
@@ -114,10 +113,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
-import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.abs
-import kotlin.math.max
 
 internal val LocalMaterialTheme = staticCompositionLocalOf<ColorScheme> { error("No ColorScheme provided") }
 
@@ -368,558 +364,165 @@ fun UnifiedPlayerSheet(
         }
     }
 
-    val currentBottomPadding by remember(
-        showPlayerContentArea,
-        collapsedStateHorizontalPadding,
-        predictiveBackCollapseProgress,
-        currentSheetContentState
-    ) {
-        derivedStateOf {
-            if (predictiveBackCollapseProgress > 0f && showPlayerContentArea && currentSheetContentState == PlayerSheetState.EXPANDED) {
-                lerp(0.dp, collapsedStateHorizontalPadding, predictiveBackCollapseProgress)
-            } else {
-                0.dp
-            }
-        }
-    }
+    val sheetVisualState = rememberSheetVisualState(
+        showPlayerContentArea = showPlayerContentArea,
+        collapsedStateHorizontalPadding = collapsedStateHorizontalPadding,
+        predictiveBackCollapseProgress = predictiveBackCollapseProgress,
+        currentSheetContentState = currentSheetContentState,
+        playerContentExpansionFraction = playerContentExpansionFraction,
+        containerHeight = containerHeight,
+        currentSheetTranslationY = currentSheetTranslationY,
+        sheetCollapsedTargetY = sheetCollapsedTargetY,
+        navBarStyle = navBarStyle,
+        navBarCornerRadiusDp = navBarCornerRadius.dp,
+        isNavBarHidden = isNavBarHidden,
+        isPlaying = infrequentPlayerState.isPlaying,
+        hasCurrentSong = infrequentPlayerState.currentSong != null,
+        swipeDismissProgress = swipeDismissProgress
+    )
+    val currentBottomPadding = sheetVisualState.currentBottomPadding
+    val playerContentAreaHeightDp = sheetVisualState.playerContentAreaHeightDp
+    val visualSheetTranslationY = sheetVisualState.visualSheetTranslationY
+    val overallSheetTopCornerRadius = sheetVisualState.overallSheetTopCornerRadius
+    val playerContentActualBottomRadius = sheetVisualState.playerContentActualBottomRadius
+    val currentHorizontalPadding = sheetVisualState.currentHorizontalPadding
 
-    val playerContentAreaHeightDp by remember(
-        showPlayerContentArea,
-        playerContentExpansionFraction,
-        containerHeight
-    ) {
-        derivedStateOf {
-            if (showPlayerContentArea) lerp(
-                MiniPlayerHeight,
-                containerHeight,
-                playerContentExpansionFraction.value
-            )
-            else 0.dp
-        }
-    }
+    val queueSheetState = rememberQueueSheetState(
+        scope = scope,
+        screenHeightPx = screenHeightPx,
+        density = density,
+        currentBottomPadding = currentBottomPadding,
+        showPlayerContentArea = showPlayerContentArea,
+        currentSheetContentState = currentSheetContentState
+    )
+    val showQueueSheet = queueSheetState.showQueueSheet
+    val allowQueueSheetInteraction = queueSheetState.allowQueueSheetInteraction
+    val queueSheetOffset = queueSheetState.queueSheetOffset
+    val queueSheetHeightPx = queueSheetState.queueSheetHeightPx
+    val queueHiddenOffsetPx = queueSheetState.queueHiddenOffsetPx
+    val queueSheetController = queueSheetState.queueSheetController
+    val onQueueSheetHeightPxChange = queueSheetState.onQueueSheetHeightPxChange
 
-    val visualSheetTranslationY by remember {
-        derivedStateOf {
-            currentSheetTranslationY.value * (1f - predictiveBackCollapseProgress) +
-                    (sheetCollapsedTargetY * predictiveBackCollapseProgress)
-        }
-    }
-
-    val overallSheetTopCornerRadiusTargetValue by remember(
-        showPlayerContentArea,
-        playerContentExpansionFraction,
-        predictiveBackCollapseProgress,
-        currentSheetContentState,
-        navBarStyle,
-        navBarCornerRadius,
-        isNavBarHidden
-    ) {
-        derivedStateOf {
-            if (showPlayerContentArea) {
-                val collapsedCornerTarget = if (navBarStyle == NavBarStyle.FULL_WIDTH) {
-                    32.dp
-                } else if (isNavBarHidden) {
-                    60.dp
-                } else {
-                    navBarCornerRadius.dp
-                }
-
-                if (predictiveBackCollapseProgress > 0f && currentSheetContentState == PlayerSheetState.EXPANDED) {
-                    val expandedCorner = 0.dp
-                    lerp(expandedCorner, collapsedCornerTarget, predictiveBackCollapseProgress)
-                } else {
-                    val fraction = playerContentExpansionFraction.value
-                    val expandedTarget = 0.dp
-                    lerp(collapsedCornerTarget, expandedTarget, fraction)
-                }
-            } else {
-                if (navBarStyle == NavBarStyle.FULL_WIDTH) {
-                    0.dp
-                } else if (isNavBarHidden) {
-                    60.dp
-                } else {
-                    navBarCornerRadius.dp
-                }
-            }
-        }
-    }
-
-    val overallSheetTopCornerRadius = overallSheetTopCornerRadiusTargetValue
-
-    val playerContentActualBottomRadiusTargetValue by remember(
-        navBarStyle,
-        showPlayerContentArea,
-        playerContentExpansionFraction,
-        infrequentPlayerState.isPlaying,
-        infrequentPlayerState.currentSong,
-        predictiveBackCollapseProgress,
-        currentSheetContentState,
-        swipeDismissProgress,
-        isNavBarHidden,
-        navBarCornerRadius
-    ) {
-        derivedStateOf {
-            if (navBarStyle == NavBarStyle.FULL_WIDTH) {
-                val fraction = playerContentExpansionFraction.value
-                return@derivedStateOf lerp(32.dp, 26.dp, fraction)
-            }
-
-            val calculatedNormally =
-                if (predictiveBackCollapseProgress > 0f && showPlayerContentArea && currentSheetContentState == PlayerSheetState.EXPANDED) {
-                    val expandedRadius = 26.dp
-                    val collapsedRadiusTarget = if (isNavBarHidden) 60.dp else 12.dp
-                    lerp(expandedRadius, collapsedRadiusTarget, predictiveBackCollapseProgress)
-                } else {
-                    if (showPlayerContentArea) {
-                        val fraction = playerContentExpansionFraction.value
-                        val collapsedRadius = if (isNavBarHidden) 60.dp else 12.dp
-                        if (fraction < 0.2f) {
-                            lerp(collapsedRadius, 26.dp, (fraction / 0.2f).coerceIn(0f, 1f))
-                        } else {
-                            26.dp
-                        }
-                    } else {
-                        if (!infrequentPlayerState.isPlaying || infrequentPlayerState.currentSong == null) {
-                            if (isNavBarHidden) 32.dp else navBarCornerRadius.dp
-                        } else {
-                            if (isNavBarHidden) 32.dp else 12.dp
-                        }
-                    }
-                }
-
-            if (currentSheetContentState == PlayerSheetState.COLLAPSED &&
-                swipeDismissProgress > 0f &&
-                showPlayerContentArea &&
-                playerContentExpansionFraction.value < 0.01f
-            ) {
-                val baseCollapsedRadius = if (isNavBarHidden) 32.dp else 12.dp
-                lerp(baseCollapsedRadius, navBarCornerRadius.dp, swipeDismissProgress)
-            } else {
-                calculatedNormally
-            }
-        }
-    }
-
-    val playerContentActualBottomRadius = playerContentActualBottomRadiusTargetValue
-
-    val actualCollapsedStateHorizontalPadding =
-        if (navBarStyle == NavBarStyle.FULL_WIDTH) 14.dp else collapsedStateHorizontalPadding
-
-    val currentHorizontalPadding by remember(
-        showPlayerContentArea,
-        playerContentExpansionFraction,
-        actualCollapsedStateHorizontalPadding,
-        predictiveBackCollapseProgress,
-        navBarStyle
-    ) {
-        derivedStateOf {
-            if (predictiveBackCollapseProgress > 0f && showPlayerContentArea && currentSheetContentState == PlayerSheetState.EXPANDED) {
-                lerp(0.dp, actualCollapsedStateHorizontalPadding, predictiveBackCollapseProgress)
-            } else if (showPlayerContentArea) {
-                lerp(
-                    actualCollapsedStateHorizontalPadding,
-                    0.dp,
-                    playerContentExpansionFraction.value
-                )
-            } else {
-                actualCollapsedStateHorizontalPadding
-            }
-        }
-    }
-
-    var showQueueSheet by remember { mutableStateOf(false) }
-    val allowQueueSheetInteraction by remember(showPlayerContentArea, currentSheetContentState) {
-        derivedStateOf {
-            showPlayerContentArea && currentSheetContentState == PlayerSheetState.EXPANDED
-        }
-    }
-    val queueSheetOffset = remember(screenHeightPx) { Animatable(screenHeightPx) }
-    var queueSheetHeightPx by remember { mutableFloatStateOf(0f) }
-    val queueHiddenOffsetPx by remember(currentBottomPadding, queueSheetHeightPx, density) {
-        derivedStateOf {
-            val basePadding = with(density) { currentBottomPadding.toPx() }
-            if (queueSheetHeightPx == 0f) 0f else queueSheetHeightPx + basePadding
-        }
-    }
-    val queueDragThresholdPx by remember(queueHiddenOffsetPx) {
-        derivedStateOf { queueHiddenOffsetPx * 0.08f }
-    }
-    val queueMinFlingTravelPx by remember(density) {
-        derivedStateOf { with(density) { 18.dp.toPx() } }
-    }
-    var pendingSaveQueueOverlay by remember { mutableStateOf<SaveQueueOverlayData?>(null) }
     var showCastSheet by remember { mutableStateOf(false) }
     var castSheetOpenFraction by remember { mutableFloatStateOf(0f) }
-    var isDragging by remember { mutableStateOf(false) }
-    var isDraggingPlayerArea by remember { mutableStateOf(false) }
+    val sheetBackAndDragState = rememberSheetBackAndDragState(
+        showPlayerContentArea = showPlayerContentArea,
+        currentSheetContentState = currentSheetContentState
+    )
     val velocityTracker = remember { VelocityTracker() }
-
-    LaunchedEffect(queueHiddenOffsetPx) {
-        if (queueHiddenOffsetPx <= 0f) return@LaunchedEffect
-        val targetOffset = if (showQueueSheet) {
-            queueSheetOffset.value.coerceIn(0f, queueHiddenOffsetPx)
-        } else {
-            queueHiddenOffsetPx
-        }
-        queueSheetOffset.snapTo(targetOffset)
-    }
-
-    LaunchedEffect(showQueueSheet, queueHiddenOffsetPx) {
-        if (!showQueueSheet && queueHiddenOffsetPx > 0f && queueSheetOffset.value != queueHiddenOffsetPx) {
-            queueSheetOffset.snapTo(queueHiddenOffsetPx)
-        }
-    }
-
-    suspend fun animateQueueSheetInternal(targetExpanded: Boolean) {
-        if (queueHiddenOffsetPx == 0f) {
-            showQueueSheet = targetExpanded
-            return
-        }
-        val target = if (targetExpanded) 0f else queueHiddenOffsetPx
-        showQueueSheet = true
-        queueSheetOffset.animateTo(
-            targetValue = target,
-            animationSpec = tween(
-                durationMillis = ANIMATION_DURATION_MS,
-                easing = FastOutSlowInEasing
-            )
-        )
-        showQueueSheet = targetExpanded
-    }
-
-    fun animateQueueSheet(targetExpanded: Boolean) {
-        if (!allowQueueSheetInteraction && targetExpanded) return
-        scope.launch { animateQueueSheetInternal(targetExpanded && allowQueueSheetInteraction) }
-    }
-
-    fun beginQueueDrag() {
-        if (queueHiddenOffsetPx == 0f || !allowQueueSheetInteraction) return
-        showQueueSheet = true
-        scope.launch { queueSheetOffset.stop() }
-    }
-
-    fun dragQueueBy(dragAmount: Float) {
-        if (queueHiddenOffsetPx == 0f || !allowQueueSheetInteraction) return
-        val newOffset = (queueSheetOffset.value + dragAmount).coerceIn(0f, queueHiddenOffsetPx)
-        scope.launch { queueSheetOffset.snapTo(newOffset) }
-    }
-
-    fun endQueueDrag(totalDrag: Float, velocity: Float) {
-        if (queueHiddenOffsetPx == 0f || !allowQueueSheetInteraction) return
-        val isFastUpward = velocity < -650f
-        val isFastDownward = velocity > 650f
-        val hasMeaningfulUpwardTravel = totalDrag < -queueMinFlingTravelPx
-        val shouldExpand =
-            (isFastUpward && hasMeaningfulUpwardTravel) ||
-                    (!isFastDownward && (
-                            queueSheetOffset.value < queueHiddenOffsetPx - queueDragThresholdPx ||
-                                    totalDrag < -queueDragThresholdPx
-                            ))
-        animateQueueSheet(shouldExpand)
-    }
+    val sheetModalOverlayController = rememberSheetModalOverlayController(
+        scope = scope,
+        queueSheetController = queueSheetController,
+        animationDurationMs = ANIMATION_DURATION_MS,
+        onCollapsePlayerSheet = { playerViewModel.collapsePlayerSheet() }
+    )
+    val pendingSaveQueueOverlay = sheetModalOverlayController.pendingSaveQueueOverlay
+    val selectedSongForInfo = sheetModalOverlayController.selectedSongForInfo
 
     val hapticFeedback = LocalHapticFeedback.current
-    val updatedQueueImpactHaptics by rememberUpdatedState(hapticFeedback)
-    val miniDismissGestureHandler = remember(
-        scope,
-        density,
-        hapticFeedback,
-        offsetAnimatable,
-        screenWidthPx,
-        playerViewModel
-    ) {
-        MiniPlayerDismissGestureHandler(
-            scope = scope,
-            density = density,
-            hapticFeedback = hapticFeedback,
-            offsetAnimatable = offsetAnimatable,
-            screenWidthPx = screenWidthPx,
-            onDismissPlaylistAndShowUndo = { playerViewModel.dismissPlaylistAndShowUndo() }
-        )
-    }
-
-    LaunchedEffect(queueHiddenOffsetPx, showQueueSheet) {
-        if (queueHiddenOffsetPx == 0f) return@LaunchedEffect
-        var hasHitTopEdge = showQueueSheet && queueSheetOffset.value <= 0.5f
-        snapshotFlow { queueSheetOffset.value to showQueueSheet }
-            .collectLatest { (offset, isShown) ->
-                val isFullyOpen = isShown && offset <= 0.5f
-                if (isFullyOpen && !hasHitTopEdge) {
-                    updatedQueueImpactHaptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    hasHitTopEdge = true
-                } else if (!isFullyOpen) {
-                    hasHitTopEdge = false
-                }
-            }
-    }
-
-    LaunchedEffect(allowQueueSheetInteraction, queueHiddenOffsetPx) {
-        if (allowQueueSheetInteraction) return@LaunchedEffect
-        showQueueSheet = false
-        if (queueHiddenOffsetPx > 0f) {
-            queueSheetOffset.snapTo(queueHiddenOffsetPx)
-        }
-    }
-
-    PredictiveBackHandler(
-        enabled = showPlayerContentArea && currentSheetContentState == PlayerSheetState.EXPANDED && !isDragging
-    ) { progressFlow ->
-        try {
-            progressFlow.collect { backEvent ->
-                playerViewModel.updatePredictiveBackCollapseFraction(backEvent.progress)
-            }
-            scope.launch {
-                val progressAtRelease = playerViewModel.predictiveBackCollapseFraction.value
-                val currentVisualY =
-                    lerp(sheetExpandedTargetY, sheetCollapsedTargetY, progressAtRelease)
-                val currentVisualExpansionFraction = (1f - progressAtRelease).coerceIn(0f, 1f)
-                sheetMotionController.snapTo(
-                    translationYValue = currentVisualY,
-                    expansionFractionValue = currentVisualExpansionFraction
-                )
-                playerViewModel.updatePredictiveBackCollapseFraction(1f)
-                playerViewModel.collapsePlayerSheet()
-                playerViewModel.updatePredictiveBackCollapseFraction(0f)
-            }
-        } catch (e: CancellationException) {
-            scope.launch {
-                Animatable(playerViewModel.predictiveBackCollapseFraction.value).animateTo(
-                    targetValue = 0f,
-                    animationSpec = tween(ANIMATION_DURATION_MS)
-                ) {
-                    playerViewModel.updatePredictiveBackCollapseFraction(this.value)
-                }
-
-                if (playerViewModel.sheetState.value == PlayerSheetState.EXPANDED) {
-                    playerViewModel.expandPlayerSheet()
-                } else {
-                    playerViewModel.collapsePlayerSheet()
-                }
-            }
-        }
-    }
-
-    val shouldShowSheet by remember(showPlayerContentArea, hideMiniPlayer) {
-        derivedStateOf { showPlayerContentArea && !hideMiniPlayer }
-    }
-
-    val isQueueVisible by remember(showQueueSheet, queueHiddenOffsetPx) {
-        derivedStateOf { showQueueSheet && queueHiddenOffsetPx > 0f && queueSheetOffset.value < queueHiddenOffsetPx }
-    }
-
-    val queueVisualOpenFraction by remember(queueSheetOffset, showQueueSheet, screenHeightPx) {
-        derivedStateOf {
-            if (!showQueueSheet || screenHeightPx <= 0f) {
-                0f
-            } else {
-                val revealPx = (screenHeightPx - queueSheetOffset.value).coerceAtLeast(0f)
-                (revealPx / screenHeightPx).coerceIn(0f, 1f)
-            }
-        }
-    }
-    val bottomSheetOpenFraction by remember(queueVisualOpenFraction, castSheetOpenFraction) {
-        derivedStateOf { max(queueVisualOpenFraction, castSheetOpenFraction) }
-    }
-    val queueScrimAlpha by remember(queueVisualOpenFraction) {
-        derivedStateOf { (queueVisualOpenFraction * 0.45f).coerceIn(0f, 0.45f) }
-    }
-
-    val updatedPendingSaveOverlay = rememberUpdatedState(pendingSaveQueueOverlay)
-    fun launchSaveQueueOverlay(
-        songs: List<Song>,
-        defaultName: String,
-        onConfirm: (String, Set<String>) -> Unit
-    ) {
-        if (updatedPendingSaveOverlay.value != null) return
-        scope.launch {
-            animateQueueSheetInternal(false)
-            playerViewModel.collapsePlayerSheet()
-            delay(ANIMATION_DURATION_MS.toLong())
-            pendingSaveQueueOverlay = SaveQueueOverlayData(songs, defaultName, onConfirm)
-        }
-    }
-
-    var internalIsKeyboardVisible by remember { mutableStateOf(false) }
-    var selectedSongForInfo by remember { mutableStateOf<Song?>(null) } // State for the selected song info
-
-    val imeInsets = WindowInsets.ime
-    LaunchedEffect(imeInsets, density) {
-        snapshotFlow { imeInsets.getBottom(density) > 0 }
-            .distinctUntilChanged()
-            .collectLatest { isVisible ->
-                if (internalIsKeyboardVisible != isVisible) {
-                    internalIsKeyboardVisible = isVisible
-                }
-            }
-    }
-
-    val actuallyShowSheetContent = shouldShowSheet && (
-            !internalIsKeyboardVisible ||
-            currentSheetContentState == PlayerSheetState.EXPANDED ||
-            pendingSaveQueueOverlay != null ||
-            selectedSongForInfo != null
+    val miniDismissGestureHandler = rememberMiniPlayerDismissGestureHandler(
+        scope = scope,
+        density = density,
+        hapticFeedback = hapticFeedback,
+        offsetAnimatable = offsetAnimatable,
+        screenWidthPx = screenWidthPx,
+        onDismissPlaylistAndShowUndo = { playerViewModel.dismissPlaylistAndShowUndo() }
     )
 
-    // val currentAlbumColorSchemePair by playerViewModel.currentAlbumArtColorSchemePair.collectAsState() // Replaced by activePlayerColorSchemePair
+    QueueSheetRuntimeEffects(
+        queueSheetController = queueSheetController,
+        queueSheetOffset = queueSheetOffset,
+        queueHiddenOffsetPx = queueHiddenOffsetPx,
+        showQueueSheet = showQueueSheet,
+        allowQueueSheetInteraction = allowQueueSheetInteraction,
+        onTopEdgeReached = {
+            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
+    )
+
+    PlayerSheetPredictiveBackHandler(
+        enabled = sheetBackAndDragState.predictiveBackEnabled,
+        playerViewModel = playerViewModel,
+        sheetCollapsedTargetY = sheetCollapsedTargetY,
+        sheetExpandedTargetY = sheetExpandedTargetY,
+        sheetMotionController = sheetMotionController,
+        animationDurationMs = ANIMATION_DURATION_MS
+    )
+
+    val sheetOverlayState = rememberSheetOverlayState(
+        density = density,
+        showPlayerContentArea = showPlayerContentArea,
+        hideMiniPlayer = hideMiniPlayer,
+        currentSheetContentState = currentSheetContentState,
+        hasPendingSaveQueueOverlay = pendingSaveQueueOverlay != null,
+        hasSelectedSongForInfo = selectedSongForInfo != null,
+        showQueueSheet = showQueueSheet,
+        queueHiddenOffsetPx = queueHiddenOffsetPx,
+        queueSheetOffset = queueSheetOffset,
+        screenHeightPx = screenHeightPx,
+        castSheetOpenFraction = castSheetOpenFraction
+    )
+    val internalIsKeyboardVisible = sheetOverlayState.internalIsKeyboardVisible
+    val actuallyShowSheetContent = sheetOverlayState.actuallyShowSheetContent
+    val isQueueVisible = sheetOverlayState.isQueueVisible
+    val bottomSheetOpenFraction = sheetOverlayState.bottomSheetOpenFraction
+    val queueScrimAlpha = sheetOverlayState.queueScrimAlpha
+
     val activePlayerSchemePair by playerViewModel.activePlayerColorSchemePair.collectAsState()
     val themedAlbumArtUri by playerViewModel.currentThemedAlbumArtUri.collectAsState()
     val isDarkTheme = LocalPixelPlayDarkTheme.current
-    val systemColorScheme = MaterialTheme.colorScheme // This is the standard M3 theme
-    val isAlbumArtTheme = playerThemePreference == ThemePreference.ALBUM_ART
     val currentSong = infrequentPlayerState.currentSong
-    val hasAlbumArt = currentSong?.albumArtUriString != null
-    val needsAlbumScheme = isAlbumArtTheme && hasAlbumArt
+    val sheetThemeState = rememberSheetThemeState(
+        activePlayerSchemePair = activePlayerSchemePair,
+        isDarkTheme = isDarkTheme,
+        playerThemePreference = playerThemePreference,
+        currentSong = currentSong,
+        themedAlbumArtUri = themedAlbumArtUri,
+        preparingSongId = preparingSongId,
+        playerContentExpansionFraction = playerContentExpansionFraction,
+        systemColorScheme = MaterialTheme.colorScheme
+    )
+    val albumColorScheme = sheetThemeState.albumColorScheme
+    val miniPlayerScheme = sheetThemeState.miniPlayerScheme
+    val isPreparingPlayback = sheetThemeState.isPreparingPlayback
+    val miniReadyAlpha = sheetThemeState.miniReadyAlpha
+    val miniAppearScale = sheetThemeState.miniAppearScale
+    val playerAreaBackground = sheetThemeState.playerAreaBackground
+    val effectivePlayerAreaElevation = sheetThemeState.effectivePlayerAreaElevation
+    val miniAlpha = sheetThemeState.miniAlpha
 
-    val activePlayerScheme = remember(activePlayerSchemePair, isDarkTheme) {
-        activePlayerSchemePair?.let { if (isDarkTheme) it.dark else it.light }
-    }
-    val currentSongActiveScheme = remember(activePlayerScheme, currentSong?.albumArtUriString, themedAlbumArtUri) {
-        if (
-            activePlayerScheme != null &&
-            !currentSong?.albumArtUriString.isNullOrBlank() &&
-            currentSong?.albumArtUriString == themedAlbumArtUri
-        ) {
-            activePlayerScheme
-        } else {
-            null
-        }
-    }
-
-    var lastAlbumScheme by remember { mutableStateOf<ColorScheme?>(null) }
-    var lastAlbumSchemeSongId by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(currentSong?.id) {
-        if (currentSong?.id != lastAlbumSchemeSongId) {
-            lastAlbumScheme = null
-            lastAlbumSchemeSongId = null
-        }
-    }
-    LaunchedEffect(currentSongActiveScheme, currentSong?.id) {
-        val currentSongId = currentSong?.id
-        if (currentSongId != null && currentSongActiveScheme != null) {
-            lastAlbumScheme = currentSongActiveScheme
-            lastAlbumSchemeSongId = currentSongId
-        }
-    }
-
-    val sameSongLastAlbumScheme = remember(currentSong?.id, lastAlbumSchemeSongId, lastAlbumScheme) {
-        if (currentSong?.id != null && currentSong?.id == lastAlbumSchemeSongId) {
-            lastAlbumScheme
-        } else {
-            null
-        }
-    }
-    val isPreparingPlayback = remember(preparingSongId, currentSong?.id) {
-        preparingSongId != null && preparingSongId == currentSong?.id
-    }
-
-    val albumColorScheme = if (isAlbumArtTheme) {
-        currentSongActiveScheme ?: sameSongLastAlbumScheme ?: systemColorScheme
-    } else {
-        systemColorScheme
-    }
-
-    val miniPlayerScheme = when {
-        !needsAlbumScheme -> systemColorScheme
-        currentSongActiveScheme != null -> currentSongActiveScheme
-        sameSongLastAlbumScheme != null -> sameSongLastAlbumScheme
-        else -> systemColorScheme
-    }
-    val miniAppearProgress = remember { Animatable(0f) }
-    LaunchedEffect(currentSong?.id) {
-        if (currentSong == null) {
-            miniAppearProgress.snapTo(0f)
-        } else if (miniAppearProgress.value < 1f) {
-            miniAppearProgress.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)
-            )
-        }
-    }
-
-    val miniReadyAlpha = miniAppearProgress.value
-    val miniAppearScale = lerp(0.985f, 1f, miniAppearProgress.value)
-
-    val playerAreaBackground = miniPlayerScheme?.primaryContainer ?: Color.Transparent
-
-    val t = rememberExpansionTransition(playerContentExpansionFraction.value)
-
-    val playerAreaElevation by t.animateDp(label = "elev") { f -> lerp(2.dp, 12.dp, f) }
-    val effectivePlayerAreaElevation = lerp(0.dp, playerAreaElevation, miniReadyAlpha)
-
-    val miniAlpha by t.animateFloat(label = "miniAlpha") { f -> (1f - f * 2f).coerceIn(0f, 1f) }
-
-    val useSmoothShape by remember(useSmoothCorners, isDragging, playerContentExpansionFraction.isRunning) {
-        derivedStateOf {
-            useSmoothCorners && !isDragging && !playerContentExpansionFraction.isRunning
-        }
-    }
-
-    val playerShadowShape = remember(overallSheetTopCornerRadius, playerContentActualBottomRadius, useSmoothShape) {
-        if (useSmoothShape) {
-             AbsoluteSmoothCornerShape(
-                cornerRadiusTL = overallSheetTopCornerRadius,
-                smoothnessAsPercentBL = 60,
-                cornerRadiusTR = overallSheetTopCornerRadius,
-                smoothnessAsPercentBR = 60,
-                cornerRadiusBR = playerContentActualBottomRadius,
-                smoothnessAsPercentTL = 60,
-                cornerRadiusBL = playerContentActualBottomRadius,
-                smoothnessAsPercentTR = 60
-            )
-        } else {
-            RoundedCornerShape(
-                topStart = overallSheetTopCornerRadius,
-                topEnd = overallSheetTopCornerRadius,
-                bottomStart = playerContentActualBottomRadius,
-                bottomEnd = playerContentActualBottomRadius
-            )
-        }
-    }
-
-    val collapsedY = rememberUpdatedState(sheetCollapsedTargetY)
-    val expandedY = rememberUpdatedState(sheetExpandedTargetY)
-    val canShow = rememberUpdatedState(showPlayerContentArea)
-    val miniH = rememberUpdatedState(miniPlayerContentHeightPx)
-    val densityState = rememberUpdatedState(LocalDensity.current)
-    val currentSheetState = rememberUpdatedState(currentSheetContentState)
-    val sheetVerticalDragGestureHandler = remember(
-        scope,
-        velocityTracker,
-        sheetMotionController,
-        playerContentExpansionFraction,
-        currentSheetTranslationY,
-        visualOvershootScaleY,
-        playerViewModel
-    ) {
-        SheetVerticalDragGestureHandler(
-            scope = scope,
-            velocityTracker = velocityTracker,
-            densityProvider = { densityState.value },
-            sheetMotionController = sheetMotionController,
-            playerContentExpansionFraction = playerContentExpansionFraction,
-            currentSheetTranslationY = currentSheetTranslationY,
-            expandedYProvider = { expandedY.value },
-            collapsedYProvider = { collapsedY.value },
-            miniHeightPxProvider = { miniH.value },
-            currentSheetStateProvider = { currentSheetState.value },
-            visualOvershootScaleY = visualOvershootScaleY,
-            onDraggingChange = { isDragging = it },
-            onDraggingPlayerAreaChange = { isDraggingPlayerArea = it },
-            onAnimateSheet = { targetExpanded, animationSpec, initialVelocity ->
-                if (animationSpec == null) {
-                    animatePlayerSheet(targetExpanded = targetExpanded)
-                } else {
-                    animatePlayerSheet(
-                        targetExpanded = targetExpanded,
-                        animationSpec = animationSpec,
-                        initialVelocity = initialVelocity
-                    )
-                }
-            },
-            onExpandSheetState = { playerViewModel.expandPlayerSheet() },
-            onCollapseSheetState = { playerViewModel.collapsePlayerSheet() }
-        )
-    }
+    val sheetInteractionState = rememberSheetInteractionState(
+        scope = scope,
+        velocityTracker = velocityTracker,
+        sheetMotionController = sheetMotionController,
+        playerContentExpansionFraction = playerContentExpansionFraction,
+        currentSheetTranslationY = currentSheetTranslationY,
+        visualOvershootScaleY = visualOvershootScaleY,
+        sheetCollapsedTargetY = sheetCollapsedTargetY,
+        sheetExpandedTargetY = sheetExpandedTargetY,
+        miniPlayerContentHeightPx = miniPlayerContentHeightPx,
+        currentSheetContentState = currentSheetContentState,
+        showPlayerContentArea = showPlayerContentArea,
+        overallSheetTopCornerRadius = overallSheetTopCornerRadius,
+        playerContentActualBottomRadius = playerContentActualBottomRadius,
+        useSmoothCorners = useSmoothCorners,
+        isDragging = sheetBackAndDragState.isDragging,
+        onAnimateSheet = { targetExpanded, animationSpec, initialVelocity ->
+            if (animationSpec == null) {
+                animatePlayerSheet(targetExpanded = targetExpanded)
+            } else {
+                animatePlayerSheet(
+                    targetExpanded = targetExpanded,
+                    animationSpec = animationSpec,
+                    initialVelocity = initialVelocity
+                )
+            }
+        },
+        onExpandSheetState = { playerViewModel.expandPlayerSheet() },
+        onCollapseSheetState = { playerViewModel.collapsePlayerSheet() },
+        onDraggingChange = sheetBackAndDragState.onDraggingChange,
+        onDraggingPlayerAreaChange = sheetBackAndDragState.onDraggingPlayerAreaChange
+    )
 
     if (actuallyShowSheetContent) {
         Surface(
@@ -968,12 +571,12 @@ fun UnifiedPlayerSheet(
                                 )
                                 .background(
                                     color = playerAreaBackground,
-                                    shape = playerShadowShape
+                                    shape = sheetInteractionState.playerShadowShape
                                 )
                                 .clipToBounds()
                                 .playerSheetVerticalDragGesture(
-                                    enabled = canShow.value,
-                                    handler = sheetVerticalDragGestureHandler
+                                    enabled = sheetInteractionState.canDragSheet,
+                                    handler = sheetInteractionState.sheetVerticalDragGestureHandler
                                 )
                                 .clickable(
                                     enabled = tapBackgroundClosesPlayer || currentSheetContentState == PlayerSheetState.COLLAPSED,
@@ -1004,11 +607,11 @@ fun UnifiedPlayerSheet(
                                 playerViewModel = playerViewModel,
                                 currentPositionProvider = positionToDisplayProvider,
                                 isFavorite = isFavorite,
-                                onShowQueueClicked = { animateQueueSheet(true) },
-                                onQueueDragStart = { beginQueueDrag() },
-                                onQueueDrag = { dragQueueBy(it) },
+                                onShowQueueClicked = { queueSheetController.animate(true) },
+                                onQueueDragStart = { queueSheetController.beginDrag() },
+                                onQueueDrag = { queueSheetController.dragBy(it) },
                                 onQueueRelease = { totalDrag, velocity ->
-                                    endQueueDrag(totalDrag, velocity)
+                                    queueSheetController.endDrag(totalDrag, velocity)
                                 },
                                 onShowCastClicked = { showCastSheet = true }
                             )
@@ -1030,11 +633,11 @@ fun UnifiedPlayerSheet(
                         currentPositionProvider = positionToDisplayProvider,
                         isCastConnecting = isCastConnecting,
                         isFavorite = isFavorite,
-                        onShowQueueClicked = { animateQueueSheet(true) },
-                        onQueueDragStart = { beginQueueDrag() },
-                        onQueueDrag = { dragQueueBy(it) },
+                        onShowQueueClicked = { queueSheetController.animate(true) },
+                        onQueueDragStart = { queueSheetController.beginDrag() },
+                        onQueueDrag = { queueSheetController.dragBy(it) },
                         onQueueRelease = { totalDrag, velocity ->
-                            endQueueDrag(totalDrag, velocity)
+                            queueSheetController.endDrag(totalDrag, velocity)
                         }
                     )
 
@@ -1046,7 +649,7 @@ fun UnifiedPlayerSheet(
                 }
 
                 BackHandler(enabled = isQueueVisible && !internalIsKeyboardVisible) {
-                    animateQueueSheet(false)
+                    queueSheetController.animate(false)
                 }
 
 
@@ -1058,7 +661,7 @@ fun UnifiedPlayerSheet(
                     queueHiddenOffsetPx = queueHiddenOffsetPx,
                     queueSheetOffset = queueSheetOffset,
                     queueSheetHeightPx = queueSheetHeightPx,
-                    onQueueSheetHeightPxChange = { queueSheetHeightPx = it },
+                    onQueueSheetHeightPxChange = onQueueSheetHeightPxChange,
                     configurationResetKey = configuration,
                     currentPlaybackQueue = currentPlaybackQueue,
                     currentQueueSourceName = currentQueueSourceName,
@@ -1068,21 +671,21 @@ fun UnifiedPlayerSheet(
                     isEndOfTrackTimerActive = isEndOfTrackTimerActiveState,
                     playerViewModel = playerViewModel,
                     selectedSongForInfo = selectedSongForInfo,
-                    onSelectedSongForInfoChange = { selectedSongForInfo = it },
-                    onAnimateQueueSheet = { expanded -> animateQueueSheet(expanded) },
-                    onBeginQueueDrag = { beginQueueDrag() },
-                    onDragQueueBy = { drag -> dragQueueBy(drag) },
-                    onEndQueueDrag = { totalDrag, velocity -> endQueueDrag(totalDrag, velocity) },
+                    onSelectedSongForInfoChange = { sheetModalOverlayController.updateSelectedSongForInfo(it) },
+                    onAnimateQueueSheet = { expanded -> queueSheetController.animate(expanded) },
+                    onBeginQueueDrag = { queueSheetController.beginDrag() },
+                    onDragQueueBy = { drag -> queueSheetController.dragBy(drag) },
+                    onEndQueueDrag = { totalDrag, velocity -> queueSheetController.endDrag(totalDrag, velocity) },
                     onLaunchSaveQueueOverlay = { songs, defaultName, onConfirm ->
-                        launchSaveQueueOverlay(songs, defaultName, onConfirm)
+                        sheetModalOverlayController.launchSaveQueueOverlay(songs, defaultName, onConfirm)
                     },
                     onNavigateToAlbum = { song ->
                         scope.launch {
                             sheetMotionController.snapCollapsed(sheetCollapsedTargetY)
                         }
                         playerViewModel.collapsePlayerSheet()
-                        animateQueueSheet(false)
-                        selectedSongForInfo = null
+                        queueSheetController.animate(false)
+                        sheetModalOverlayController.updateSelectedSongForInfo(null)
                         if (song.albumId != -1L) {
                             navController.navigate(Screen.AlbumDetail.createRoute(song.albumId))
                         }
@@ -1092,8 +695,8 @@ fun UnifiedPlayerSheet(
                             sheetMotionController.snapCollapsed(sheetCollapsedTargetY)
                         }
                         playerViewModel.collapsePlayerSheet()
-                        animateQueueSheet(false)
-                        selectedSongForInfo = null
+                        queueSheetController.animate(false)
+                        sheetModalOverlayController.updateSelectedSongForInfo(null)
                         if (song.artistId != -1L) {
                             navController.navigate(Screen.ArtistDetail.createRoute(song.artistId))
                         }
@@ -1117,7 +720,7 @@ fun UnifiedPlayerSheet(
 
         UnifiedPlayerSaveQueueLayer(
             pendingOverlay = pendingSaveQueueOverlay,
-            onDismissOverlay = { pendingSaveQueueOverlay = null }
+            onDismissOverlay = { sheetModalOverlayController.dismissSaveQueueOverlay() }
         )
     }
 }
