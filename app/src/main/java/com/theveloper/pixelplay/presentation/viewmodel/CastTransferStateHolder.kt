@@ -100,6 +100,7 @@ class CastTransferStateHolder @Inject constructor(
     private var lastRemoteItemErrorLoggedAt: Long = 0L
     private var lastRemoteIdleLogKey: String? = null
     private var lastRemoteIdleLoggedAt: Long = 0L
+    private var skipTransferBackOnNextSessionEnd: Boolean = false
 
     // Listeners
     private var remoteMediaClientCallback: RemoteMediaClient.Callback? = null
@@ -623,6 +624,14 @@ class CastTransferStateHolder @Inject constructor(
             }
         }
     }
+
+    /**
+     * One-shot guard used by mini-player dismiss: disconnect Cast without restoring
+     * the remote queue back into the local player.
+     */
+    fun skipNextTransferBack() {
+        skipTransferBackOnNextSessionEnd = true
+    }
     
     suspend fun stopServerAndTransferBack() {
         sessionSuspendedRecoveryJob?.cancel()
@@ -630,6 +639,8 @@ class CastTransferStateHolder @Inject constructor(
         remoteProgressObserverJob?.cancel()
         remoteStatusRefreshJob?.cancel()
         castStateHolder.setRemotelySeeking(false)
+        val shouldSkipTransferBack = skipTransferBackOnNextSessionEnd
+        skipTransferBackOnNextSessionEnd = false
         val session = castStateHolder.castSession.value ?: return
         val remoteMediaClient = session.remoteMediaClient
          
@@ -677,74 +688,80 @@ class CastTransferStateHolder @Inject constructor(
             castStateHolder.setCastConnecting(true)
         }
         
-        // We defer getting the player until AFTER the suspension to avoid race conditions
-        // where a transition might have released the reference we held.
-        
-        val queueData = withContext(Dispatchers.Default) {
-            val fallbackQueue = if (transferSnapshot.lastKnownStatus?.queueItems?.isNotEmpty() == true) {
-                transferSnapshot.lastKnownStatus.queueItems.mapNotNull { item ->
-                    item.customData?.optString("songId")?.let { songId ->
-                         getMasterAllSongs?.invoke()?.firstOrNull { it.id == songId }
-                    }
-                }.toImmutableList()
-            } else {
-                transferSnapshot.lastRemoteQueue
-            }
-            val chosenQueue = if (fallbackQueue.isEmpty()) transferSnapshot.lastRemoteQueue else fallbackQueue
-             val songMap = getMasterAllSongs?.invoke()?.associateBy { it.id } ?: emptyMap()
-            val finalQueue = chosenQueue.mapNotNull { song -> songMap[song.id] }
-            
-            val targetSongId = transferSnapshot.lastKnownStatus?.getQueueItemById(lastItemId ?: 0)?.customData?.optString("songId")
-                ?: transferSnapshot.lastRemoteSongId
-                
-            QueueTransferData(
-                finalQueue = finalQueue,
-                targetSongId = targetSongId,
-                isShuffleEnabled = transferSnapshot.isShuffleEnabled
-            )
-        }
-        
-        if (queueData.finalQueue.isNotEmpty() && queueData.targetSongId != null) {
-             val desiredRepeatMode = when (lastRepeatMode) {
-                MediaStatus.REPEAT_MODE_REPEAT_SINGLE -> Player.REPEAT_MODE_ONE
-                MediaStatus.REPEAT_MODE_REPEAT_ALL, MediaStatus.REPEAT_MODE_REPEAT_ALL_AND_SHUFFLE -> Player.REPEAT_MODE_ALL
-                else -> Player.REPEAT_MODE_OFF
-            }
-            
-            // Reusing local queue logic simplification: always rebuild for safety/completeness
-            val rebuildResult = withContext(Dispatchers.Default) {
-                val startIndex = queueData.finalQueue.indexOfFirst { it.id == queueData.targetSongId }.coerceAtLeast(0)
-                val mediaItems = queueData.finalQueue.map { song -> MediaItemBuilder.build(song) }
-                RebuildArtifacts(startIndex, mediaItems, queueData.finalQueue.getOrNull(startIndex))
-            }
-            
-            // Now retrieve the FRESH local player reference
-            val localPlayer = dualPlayerEngine.masterPlayer
+        if (!shouldSkipTransferBack) {
+            // We defer getting the player until AFTER the suspension to avoid race conditions
+            // where a transition might have released the reference we held.
+            val queueData = withContext(Dispatchers.Default) {
+                val fallbackQueue = if (transferSnapshot.lastKnownStatus?.queueItems?.isNotEmpty() == true) {
+                    transferSnapshot.lastKnownStatus.queueItems.mapNotNull { item ->
+                        item.customData?.optString("songId")?.let { songId ->
+                            getMasterAllSongs?.invoke()?.firstOrNull { it.id == songId }
+                        }
+                    }.toImmutableList()
+                } else {
+                    transferSnapshot.lastRemoteQueue
+                }
+                val chosenQueue = if (fallbackQueue.isEmpty()) transferSnapshot.lastRemoteQueue else fallbackQueue
+                val songMap = getMasterAllSongs?.invoke()?.associateBy { it.id } ?: emptyMap()
+                val finalQueue = chosenQueue.mapNotNull { song -> songMap[song.id] }
 
-            localPlayer.shuffleModeEnabled = queueData.isShuffleEnabled
-            localPlayer.repeatMode = desiredRepeatMode
-            localPlayer.setMediaItems(rebuildResult.mediaItems, rebuildResult.startIndex, transferSnapshot.lastPosition)
-            localPlayer.prepare()
-            
-            if (wasPlaying) localPlayer.play() else localPlayer.pause()
-            
-            // Sync UI
-            updateQueue?.invoke(queueData.finalQueue)
-            playbackStateHolder.updateStablePlayerState {
-                it.copy(
-                    currentSong = rebuildResult.targetSong,
-                    isPlaying = wasPlaying,
-                    totalDuration = rebuildResult.targetSong?.duration ?: it.totalDuration,
-                    isShuffleEnabled = queueData.isShuffleEnabled,
-                    repeatMode = desiredRepeatMode
+                val targetSongId = transferSnapshot.lastKnownStatus
+                    ?.getQueueItemById(lastItemId ?: 0)
+                    ?.customData
+                    ?.optString("songId")
+                    ?: transferSnapshot.lastRemoteSongId
+
+                QueueTransferData(
+                    finalQueue = finalQueue,
+                    targetSongId = targetSongId,
+                    isShuffleEnabled = transferSnapshot.isShuffleEnabled
                 )
             }
-            
-            if (wasPlaying) {
-                playbackStateHolder.startProgressUpdates()
-            } else {
-                playbackStateHolder.updateStablePlayerState { it.copy(currentPosition = transferSnapshot.lastPosition) }
+
+            if (queueData.finalQueue.isNotEmpty() && queueData.targetSongId != null) {
+                val desiredRepeatMode = when (lastRepeatMode) {
+                    MediaStatus.REPEAT_MODE_REPEAT_SINGLE -> Player.REPEAT_MODE_ONE
+                    MediaStatus.REPEAT_MODE_REPEAT_ALL, MediaStatus.REPEAT_MODE_REPEAT_ALL_AND_SHUFFLE -> Player.REPEAT_MODE_ALL
+                    else -> Player.REPEAT_MODE_OFF
+                }
+
+                // Reusing local queue logic simplification: always rebuild for safety/completeness
+                val rebuildResult = withContext(Dispatchers.Default) {
+                    val startIndex = queueData.finalQueue.indexOfFirst { it.id == queueData.targetSongId }.coerceAtLeast(0)
+                    val mediaItems = queueData.finalQueue.map { song -> MediaItemBuilder.build(song) }
+                    RebuildArtifacts(startIndex, mediaItems, queueData.finalQueue.getOrNull(startIndex))
+                }
+
+                // Now retrieve the FRESH local player reference
+                val localPlayer = dualPlayerEngine.masterPlayer
+
+                localPlayer.shuffleModeEnabled = queueData.isShuffleEnabled
+                localPlayer.repeatMode = desiredRepeatMode
+                localPlayer.setMediaItems(rebuildResult.mediaItems, rebuildResult.startIndex, transferSnapshot.lastPosition)
+                localPlayer.prepare()
+
+                if (wasPlaying) localPlayer.play() else localPlayer.pause()
+
+                // Sync UI
+                updateQueue?.invoke(queueData.finalQueue)
+                playbackStateHolder.updateStablePlayerState {
+                    it.copy(
+                        currentSong = rebuildResult.targetSong,
+                        isPlaying = wasPlaying,
+                        totalDuration = rebuildResult.targetSong?.duration ?: it.totalDuration,
+                        isShuffleEnabled = queueData.isShuffleEnabled,
+                        repeatMode = desiredRepeatMode
+                    )
+                }
+
+                if (wasPlaying) {
+                    playbackStateHolder.startProgressUpdates()
+                } else {
+                    playbackStateHolder.updateStablePlayerState { it.copy(currentPosition = transferSnapshot.lastPosition) }
+                }
             }
+        } else {
+            Timber.tag(CAST_LOG_TAG).i("Skipping transfer back for this Cast session end.")
         }
         
         lastRemoteMediaStatus = null
@@ -1026,6 +1043,7 @@ class CastTransferStateHolder @Inject constructor(
         onDisconnect = null
         onSongChanged = null
         scope = null
+        skipTransferBackOnNextSessionEnd = false
     }
 
     // Helper Data Classes

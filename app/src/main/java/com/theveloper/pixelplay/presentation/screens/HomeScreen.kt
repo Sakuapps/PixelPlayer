@@ -80,6 +80,7 @@ import com.theveloper.pixelplay.presentation.components.HomeOptionsBottomSheet
 import com.theveloper.pixelplay.presentation.components.MiniPlayerHeight
 import com.theveloper.pixelplay.presentation.components.NavBarContentHeight
 import com.theveloper.pixelplay.presentation.components.RecentlyPlayedSection
+import com.theveloper.pixelplay.presentation.components.RecentlyPlayedSectionMinSongsToShow
 import com.theveloper.pixelplay.presentation.components.SmartImage
 import com.theveloper.pixelplay.presentation.components.StatsOverviewCard
 import com.theveloper.pixelplay.presentation.model.mapRecentlyPlayedSongs
@@ -249,24 +250,26 @@ fun HomeScreen(
                     }
                 }
 
-                item(key = "recently_played_section") {
-                    RecentlyPlayedSection(
-                        songs = recentlyPlayedSongs,
-                        onSongClick = { song ->
-                            if (recentlyPlayedQueue.isNotEmpty()) {
-                                playerViewModel.playSongs(
-                                    songsToPlay = recentlyPlayedQueue,
-                                    startSong = song,
-                                    queueName = "Recently Played"
-                                )
-                            }
-                        },
-                        onOpenAllClick = {
-                            navController.navigate(Screen.RecentlyPlayed.route)
-                        },
-                        currentSongId = currentSong?.id,
-                        contentPadding = PaddingValues(start = 8.dp, end = 24.dp)
-                    )
+                if (recentlyPlayedSongs.size >= RecentlyPlayedSectionMinSongsToShow) {
+                    item(key = "recently_played_section") {
+                        RecentlyPlayedSection(
+                            songs = recentlyPlayedSongs,
+                            onSongClick = { song ->
+                                if (recentlyPlayedQueue.isNotEmpty()) {
+                                    playerViewModel.playSongs(
+                                        songsToPlay = recentlyPlayedQueue,
+                                        startSong = song,
+                                        queueName = "Recently Played"
+                                    )
+                                }
+                            },
+                            onOpenAllClick = {
+                                navController.navigate(Screen.RecentlyPlayed.route)
+                            },
+                            currentSongId = currentSong?.id,
+                            contentPadding = PaddingValues(start = 8.dp, end = 24.dp)
+                        )
+                    }
                 }
 
                 item(key = "listening_stats_preview") {

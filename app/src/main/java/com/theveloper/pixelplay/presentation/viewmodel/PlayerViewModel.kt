@@ -266,6 +266,13 @@ class PlayerViewModel @Inject constructor(
             initialValue = FullPlayerLoadingTweaks()
         )
 
+    val showPlayerFileInfo: StateFlow<Boolean> = userPreferencesRepository.showPlayerFileInfoFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
     /**
      * Whether tapping the background of the player sheet toggles its state.
      * When disabled, users must use gestures or buttons to expand/collapse.
@@ -3054,6 +3061,17 @@ class PlayerViewModel @Inject constructor(
                     dismissedPosition = positionToDismiss,
                     showDismissUndoBar = true
                 )
+            }
+
+            val hasCastSession = castStateHolder.castSession.value != null
+            val shouldDisconnectRemote = hasCastSession ||
+                    castStateHolder.isRemotePlaybackActive.value ||
+                    castStateHolder.isCastConnecting.value
+            if (shouldDisconnectRemote) {
+                if (hasCastSession) {
+                    castTransferStateHolder.skipNextTransferBack()
+                }
+                disconnect()
             }
 
             // Stop playback and clear current player state

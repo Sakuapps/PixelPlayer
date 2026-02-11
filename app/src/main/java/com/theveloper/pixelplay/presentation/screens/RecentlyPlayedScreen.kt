@@ -424,8 +424,8 @@ private fun rememberRecentlyPlayedTitleStyle(): TextStyle {
                 Font(
                     resId = R.font.gflex_variable,
                     variationSettings = FontVariation.Settings(
-                        FontVariation.weight(760),
-                        FontVariation.width(112f),
+                        FontVariation.weight(560),
+                        FontVariation.width(122f),
                         FontVariation.grade(40),
                         FontVariation.Setting("ROND", 100f),
                         FontVariation.Setting("XTRA", 520f),
@@ -434,7 +434,7 @@ private fun rememberRecentlyPlayedTitleStyle(): TextStyle {
                     )
                 )
             ),
-            fontWeight = FontWeight(760),
+            fontWeight = FontWeight(560),
             fontSize = 34.sp,
             lineHeight = 38.sp,
             letterSpacing = (-0.4).sp
@@ -455,7 +455,7 @@ private fun RecentlyPlayedRangeSelector(
     ) {
         items(StatsTimeRange.entries, key = { it.name }) { range ->
             FilterChip(
-                modifier = Modifier.height(38.dp),
+                modifier = Modifier.height(44.dp),
                 selected = selected == range,
                 onClick = { onRangeSelected(range) },
                 label = { Text(range.displayName) },
@@ -469,16 +469,18 @@ private fun RecentlyPlayedRangeSelector(
                         Icon(
                             imageVector = Icons.Outlined.History,
                             contentDescription = null,
-                            modifier = Modifier.size(FilterChipDefaults.IconSize)
+                            modifier = Modifier
+                                .padding(start = 4.dp)
+                                .size(FilterChipDefaults.IconSize)
                         )
                     }
                 } else {
                     null
                 },
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    selectedLeadingIconColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    selectedContainerColor = MaterialTheme.colorScheme.tertiary,
+                    selectedLabelColor = MaterialTheme.colorScheme.onTertiary,
+                    selectedLeadingIconColor = MaterialTheme.colorScheme.onTertiary,
                     labelColor = MaterialTheme.colorScheme.tertiary
                 )
             )

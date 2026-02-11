@@ -29,7 +29,12 @@ fun mapRecentlyPlayedSongs(
     val seenSongIds = HashSet<String>()
     val deduped = ArrayList<RecentlyPlayedSongUiModel>(maxItems.coerceAtMost(playbackHistory.size))
 
-    for (entry in playbackHistory.sortedByDescending { it.timestamp }) {
+    val sortedHistory = playbackHistory.sortedWith(
+        compareByDescending<PlaybackStatsRepository.PlaybackHistoryEntry> { it.timestamp }
+            .thenBy { it.songId }
+    )
+
+    for (entry in sortedHistory) {
         if (deduped.size >= maxItems) break
         val safeTimestamp = entry.timestamp.coerceAtLeast(0L)
         if (safeTimestamp > endBound) continue
