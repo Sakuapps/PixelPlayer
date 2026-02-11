@@ -229,6 +229,11 @@ class AiStateHolder @Inject constructor(
 
     fun onCleared() {
         scope = null
+        allSongsProvider = null
+        favoriteSongIdsProvider = null
+        toastEmitter = null
+        playSongsCallback = null
+        openPlayerSheetCallback = null
     }
 
     private fun resolveAiPlaylistName(

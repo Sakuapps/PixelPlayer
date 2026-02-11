@@ -16,7 +16,9 @@ class AiPlaylistGenerator @Inject constructor(
     private val dailyMixManager: DailyMixManager,
     private val json: Json
 ) {
-    private val promptCache: MutableMap<String, List<String>> = mutableMapOf()
+    private val promptCache: MutableMap<String, List<String>> = object : LinkedHashMap<String, List<String>>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<String>>?): Boolean = size > 20
+    }
 
     suspend fun generate(
         userPrompt: String,

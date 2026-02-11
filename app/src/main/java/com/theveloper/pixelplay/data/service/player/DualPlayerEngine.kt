@@ -23,8 +23,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.asStateFlow // Added
+import kotlinx.coroutines.suspendCancellableCoroutine
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.resume
 
 /**
  * Manages two ExoPlayer instances (A and B) to enable seamless transitions.
@@ -283,15 +285,16 @@ class DualPlayerEngine @Inject constructor(
             playerB.prepare()
         }
 
-        // Wait until READY (or until it is clearly failing) to guarantee instant start
-        var readinessChecks = 0
-        while (playerB.playbackState == Player.STATE_BUFFERING && readinessChecks < 120) {
-            Timber.tag("TransitionDebug").v("Waiting for Player B to buffer (state=%d)", playerB.playbackState)
-            delay(25)
-            readinessChecks++
-        }
-
-        if (playerB.playbackState != Player.STATE_READY) {
+        // Wait until READY using a listener instead of polling to save CPU
+        if (playerB.playbackState == Player.STATE_BUFFERING) {
+            val ready = awaitPlayerReady(playerB, timeoutMs = 3000L)
+            if (!ready) {
+                Timber.tag("TransitionDebug").w("Player B not ready for overlap. State=%d", playerB.playbackState)
+                playerA.volume = 1f
+                setPauseAtEndOfMediaItems(false)
+                return
+            }
+        } else if (playerB.playbackState != Player.STATE_READY) {
             Timber.tag("TransitionDebug").w("Player B not ready for overlap. State=%d", playerB.playbackState)
             playerA.volume = 1f
             setPauseAtEndOfMediaItems(false)
@@ -314,18 +317,14 @@ class DualPlayerEngine @Inject constructor(
         Timber.tag("TransitionDebug").d("Player B started for overlap. Playing=%s state=%d", playerB.isPlaying, playerB.playbackState)
 
         // Ensure Player B is actually outputting audio before we begin the fade
-        var playChecks = 0
-        while (!playerB.isPlaying && playChecks < 80) {
-            Timber.tag("TransitionDebug").v("Waiting for Player B to start rendering audio (state=%d)", playerB.playbackState)
-            delay(25)
-            playChecks++
-        }
-
         if (!playerB.isPlaying) {
-            Timber.tag("TransitionDebug").e("Player B failed to start in time. Aborting crossfade.")
-            playerA.volume = 1f
-            setPauseAtEndOfMediaItems(false)
-            return
+            val playing = awaitPlayerPlaying(playerB, timeoutMs = 2000L)
+            if (!playing) {
+                Timber.tag("TransitionDebug").e("Player B failed to start in time. Aborting crossfade.")
+                playerA.volume = 1f
+                setPauseAtEndOfMediaItems(false)
+                return
+            }
         }
 
         // Small warmup to guarantee audible overlap
@@ -456,11 +455,81 @@ class DualPlayerEngine @Inject constructor(
     }
 
     /**
+     * Suspends until the player reaches STATE_READY, or until [timeoutMs] elapses.
+     * Uses a Player.Listener callback instead of polling to avoid CPU burn.
+     */
+    private suspend fun awaitPlayerReady(player: ExoPlayer, timeoutMs: Long): Boolean {
+        // Fast path: already ready
+        if (player.playbackState == Player.STATE_READY) return true
+        if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) return false
+
+        return kotlinx.coroutines.withTimeoutOrNull(timeoutMs) {
+            suspendCancellableCoroutine { cont ->
+                val listener = object : Player.Listener {
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        if (playbackState != Player.STATE_BUFFERING) {
+                            player.removeListener(this)
+                            if (cont.isActive) cont.resume(playbackState == Player.STATE_READY)
+                        }
+                    }
+                }
+                player.addListener(listener)
+                cont.invokeOnCancellation { player.removeListener(listener) }
+                // Re-check after attaching listener to avoid race
+                if (player.playbackState != Player.STATE_BUFFERING) {
+                    player.removeListener(listener)
+                    if (cont.isActive) cont.resume(player.playbackState == Player.STATE_READY)
+                }
+            }
+        } ?: false
+    }
+
+    /**
+     * Suspends until the player reports isPlaying == true, or until [timeoutMs] elapses.
+     * Uses a Player.Listener callback instead of polling to avoid CPU burn.
+     */
+    private suspend fun awaitPlayerPlaying(player: ExoPlayer, timeoutMs: Long): Boolean {
+        if (player.isPlaying) return true
+
+        return kotlinx.coroutines.withTimeoutOrNull(timeoutMs) {
+            suspendCancellableCoroutine { cont ->
+                val listener = object : Player.Listener {
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        if (isPlaying) {
+                            player.removeListener(this)
+                            if (cont.isActive) cont.resume(true)
+                        }
+                    }
+
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        // If player reaches ENDED or IDLE, it will never start playing
+                        if (playbackState == Player.STATE_ENDED || playbackState == Player.STATE_IDLE) {
+                            player.removeListener(this)
+                            if (cont.isActive) cont.resume(false)
+                        }
+                    }
+                }
+                player.addListener(listener)
+                cont.invokeOnCancellation { player.removeListener(listener) }
+                // Re-check after attaching listener to avoid race
+                if (player.isPlaying) {
+                    player.removeListener(listener)
+                    if (cont.isActive) cont.resume(true)
+                }
+            }
+        } ?: false
+    }
+
+    /**
      * Cleans up resources when the engine is no longer needed.
      */
     fun release() {
         transitionJob?.cancel()
-        if (::playerA.isInitialized) playerA.release()
+        abandonAudioFocus()
+        if (::playerA.isInitialized) {
+            playerA.removeListener(masterPlayerListener)
+            playerA.release()
+        }
         if (::playerB.isInitialized) playerB.release()
         isReleased = true
     }

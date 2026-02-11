@@ -96,9 +96,13 @@ class LyricsRepositoryImpl @Inject constructor(
         }
     }
 
-    // Rate limiting state (matching Rhythm)
-    private val lastApiCalls = mutableMapOf<String, Long>()
-    private val apiCallCounts = mutableMapOf<String, Int>()
+    // Rate limiting state (bounded to prevent unbounded growth)
+    private val lastApiCalls = object : LinkedHashMap<String, Long>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?): Boolean = size > 200
+    }
+    private val apiCallCounts = object : LinkedHashMap<String, Int>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Int>?): Boolean = size > 200
+    }
 
     // Gson for JSON cache
     private val gson = Gson()

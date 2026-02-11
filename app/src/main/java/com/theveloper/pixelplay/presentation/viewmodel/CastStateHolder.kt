@@ -228,8 +228,11 @@ class CastStateHolder @Inject constructor(
     // But refreshRoutes was launched in ViewModel.
     // We will make refreshRoutes suspend.
 
+    private var refreshRoutesJob: kotlinx.coroutines.Job? = null
+
     fun refreshRoutes(scope: kotlinx.coroutines.CoroutineScope) {
-        scope.launch {
+        refreshRoutesJob?.cancel()
+        refreshRoutesJob = scope.launch {
             _isRefreshingRoutes.value = true
             mediaRouter.removeCallback(mediaRouterCallback)
             val mediaRouteSelector = buildCastRouteSelector()
@@ -240,9 +243,9 @@ class CastStateHolder @Inject constructor(
             )
             updateRoutes()
             syncSelectedRouteFromRouter(mediaRouter)
-            
-            kotlinx.coroutines.delay(1800) 
-            
+
+            kotlinx.coroutines.delay(1800)
+
             mediaRouter.removeCallback(mediaRouterCallback)
             mediaRouter.addCallback(mediaRouteSelector, mediaRouterCallback, MediaRouter.CALLBACK_FLAG_REQUEST_DISCOVERY)
             updateRoutes()
@@ -284,6 +287,7 @@ class CastStateHolder @Inject constructor(
     }
     
     fun onCleared() {
+        refreshRoutesJob?.cancel()
         mediaRouter.removeCallback(mediaRouterCallback)
     }
 

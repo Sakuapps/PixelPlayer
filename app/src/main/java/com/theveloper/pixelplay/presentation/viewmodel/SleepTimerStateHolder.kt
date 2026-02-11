@@ -150,21 +150,6 @@ class SleepTimerStateHolder @Inject constructor(
             )
         }
 
-        // Start a coroutine to monitor and clear UI state when timer expires
-        // This ensures UI state is cleared even if AlarmManager has slight delays
-        sleepTimerJob = scope.launch {
-            val delayMs = durationMillis + 500 // Add 500ms buffer
-            kotlinx.coroutines.delay(delayMs)
-            
-            // Clear timer state after the duration has passed
-            if (_sleepTimerEndTimeMillis.value != null && !_isEndOfTrackTimerActive.value) {
-                Timber.d("Sleep timer coroutine clearing state after $durationMinutes minutes")
-                _sleepTimerEndTimeMillis.value = null
-                _activeTimerValueDisplay.value = null
-                toastEmitter?.invoke("Sleep timer finished. Playback paused.")
-            }
-        }
-
         scope.launch { toastEmitter?.invoke("Timer set for $durationMinutes minutes.") }
     }
 

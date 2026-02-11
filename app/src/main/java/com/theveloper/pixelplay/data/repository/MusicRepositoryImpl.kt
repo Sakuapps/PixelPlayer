@@ -172,16 +172,14 @@ class MusicRepositoryImpl @Inject constructor(
                 musicDao.getArtistsWithSongCountsFiltered(allowedDirs, applyFilter)
                     .map { entities ->
                         val artists = entities.map { it.toArtist() }
-                        // Trigger prefetch for missing images
+                        // Trigger prefetch for missing images (fire-and-forget on existing scope)
                         val missingImages = artists.asSequence()
                             .filter { it.imageUrl.isNullOrEmpty() && it.name.isNotBlank() }
                             .map { it.id to it.name }
                             .distinctBy { (_, name) -> name.trim().lowercase() }
                             .toList()
                         if (missingImages.isNotEmpty()) {
-                            kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
-                                artistImageRepository.prefetchArtistImages(missingImages)
-                            }
+                            artistImageRepository.prefetchArtistImages(missingImages)
                         }
                         artists
                     }
@@ -346,10 +344,13 @@ class MusicRepositoryImpl @Inject constructor(
 
     override fun getSongsByIds(songIds: List<String>): Flow<List<Song>> {
         if (songIds.isEmpty()) return flowOf(emptyList())
-        return songRepository.getSongs().map { songs ->
-            val songsMap = songs.associateBy { it.id }
-            songIds.mapNotNull { songsMap[it] }
-        }.flowOn(Dispatchers.Default)
+        val longIds = songIds.mapNotNull { it.toLongOrNull() }
+        if (longIds.isEmpty()) return flowOf(emptyList())
+        return musicDao.getSongsByIds(longIds, emptyList(), false).map { entities ->
+            val songMap = entities.associate { it.id.toString() to it.toSong() }
+            // Preserve the requested order
+            songIds.mapNotNull { songMap[it] }
+        }.flowOn(Dispatchers.IO)
     }
 
     override suspend fun getSongByPath(path: String): Song? {

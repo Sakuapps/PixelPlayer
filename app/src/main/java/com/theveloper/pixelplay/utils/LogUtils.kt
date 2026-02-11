@@ -12,14 +12,7 @@ object LogUtils {
     }
 
     private fun buildLogMessage(message: String): String {
-        val thread = Thread.currentThread()
-        val stackTrace = thread.stackTrace
-        val caller = stackTrace.getOrNull(4)
-
-        val methodName = caller?.methodName ?: "UnknownMethod"
-        val lineNumber = caller?.lineNumber ?: -1
-
-        return "($methodName:$lineNumber) [${thread.name}] - $message"
+        return "[${Thread.currentThread().name}] - $message"
     }
 
     fun d(tagProvider: Any, message: String, vararg args: Any?) {

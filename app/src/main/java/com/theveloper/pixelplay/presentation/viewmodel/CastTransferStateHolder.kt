@@ -990,6 +990,44 @@ class CastTransferStateHolder @Inject constructor(
         return songMap[pendingId]
     }
     
+    /**
+     * Cleanup all listeners, callbacks, and jobs to prevent memory leaks.
+     * Must be called when the owning ViewModel is cleared.
+     */
+    fun onCleared() {
+        // Cancel all active jobs
+        remoteProgressObserverJob?.cancel()
+        remoteStatusRefreshJob?.cancel()
+        sessionSuspendedRecoveryJob?.cancel()
+        alignToTargetJob?.cancel()
+
+        // Unregister Cast session manager listener
+        castSessionManagerListener?.let { listener ->
+            sessionManager?.removeSessionManagerListener(
+                listener,
+                CastSession::class.java
+            )
+        }
+
+        // Unregister remote media client listeners from active session
+        val remoteClient = castStateHolder.castSession.value?.remoteMediaClient
+        remoteProgressListener?.let { remoteClient?.removeProgressListener(it) }
+        remoteMediaClientCallback?.let { remoteClient?.unregisterCallback(it) }
+
+        // Null out all callback references to break retain cycles
+        castSessionManagerListener = null
+        remoteMediaClientCallback = null
+        remoteProgressListener = null
+        getCurrentQueue = null
+        updateQueue = null
+        getMasterAllSongs = null
+        onTransferBackComplete = null
+        onSheetVisible = null
+        onDisconnect = null
+        onSongChanged = null
+        scope = null
+    }
+
     // Helper Data Classes
     private data class TransferSnapshot(
         val lastKnownStatus: MediaStatus?,
