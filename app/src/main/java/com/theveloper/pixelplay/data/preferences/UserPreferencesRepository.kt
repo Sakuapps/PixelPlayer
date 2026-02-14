@@ -245,7 +245,7 @@ constructor(
 
     val loudnessEnhancerStrengthFlow: Flow<Int> =
         dataStore.data.map { preferences ->
-            preferences[PreferencesKeys.LOUDNESS_ENHANCER_STRENGTH] ?: 0
+            (preferences[PreferencesKeys.LOUDNESS_ENHANCER_STRENGTH] ?: 0).coerceIn(0, 1000)
         }
 
     suspend fun setLoudnessEnhancerEnabled(enabled: Boolean) {
@@ -253,7 +253,9 @@ constructor(
     }
 
     suspend fun setLoudnessEnhancerStrength(strength: Int) {
-        dataStore.edit { preferences -> preferences[PreferencesKeys.LOUDNESS_ENHANCER_STRENGTH] = strength }
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.LOUDNESS_ENHANCER_STRENGTH] = strength.coerceIn(0, 1000)
+        }
     }
 
     // Dismissed Warning Flows & Setters
@@ -1589,18 +1591,28 @@ constructor(
                 val stored = preferences[PreferencesKeys.EQUALIZER_CUSTOM_BANDS]
                 if (stored != null) {
                     try {
-                        json.decodeFromString<List<Int>>(stored)
+                        val decoded = json.decodeFromString<List<Int>>(stored)
+                        when {
+                            decoded.size >= 10 -> decoded.take(10)
+                            decoded.isEmpty() -> List(10) { 0 }
+                            else -> decoded + List(10 - decoded.size) { 0 }
+                        }
                     } catch (e: Exception) {
-                        listOf(0, 0, 0, 0, 0)
+                        List(10) { 0 }
                     }
                 } else {
-                    listOf(0, 0, 0, 0, 0)
+                    List(10) { 0 }
                 }
             }
 
     suspend fun setEqualizerCustomBands(bands: List<Int>) {
         dataStore.edit { preferences ->
-            preferences[PreferencesKeys.EQUALIZER_CUSTOM_BANDS] = json.encodeToString(bands)
+            val normalized = when {
+                bands.size >= 10 -> bands.take(10)
+                bands.isEmpty() -> List(10) { 0 }
+                else -> bands + List(10 - bands.size) { 0 }
+            }
+            preferences[PreferencesKeys.EQUALIZER_CUSTOM_BANDS] = json.encodeToString(normalized)
         }
     }
 

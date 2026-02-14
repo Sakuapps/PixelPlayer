@@ -95,6 +95,13 @@ class DualPlayerEngine @Inject constructor(
                 }
             }
         }
+
+        override fun onAudioSessionIdChanged(audioSessionId: Int) {
+            if (audioSessionId != 0 && _activeAudioSessionId.value != audioSessionId) {
+                _activeAudioSessionId.value = audioSessionId
+                Timber.tag("TransitionDebug").d("Master audio session changed: %d", audioSessionId)
+            }
+        }
     }
 
     fun addPlayerSwapListener(listener: (Player) -> Unit) {

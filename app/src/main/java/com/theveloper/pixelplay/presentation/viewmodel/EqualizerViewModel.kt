@@ -26,7 +26,7 @@ import kotlinx.serialization.json.Json // Added import
 data class EqualizerUiState(
     val isEnabled: Boolean = false,
     val currentPreset: EqualizerPreset = EqualizerPreset.FLAT,
-    val bandLevels: List<Int> = listOf(0, 0, 0, 0, 0),
+    val bandLevels: List<Int> = List(10) { 0 },
     val editingPresetName: String? = null,
     val bassBoostEnabled: Boolean = false,
     val bassBoostStrength: Float = 0f, // Changed to Float
@@ -224,7 +224,7 @@ class EqualizerViewModel @Inject constructor(
                     virtualizerEnabled = vEnabled,
                     virtualizerStrength = vStrength.toFloat(), // Raw 0-1000
                     loudnessEnhancerEnabled = lEnabled,
-                    loudnessEnhancerStrength = lStrength.toFloat(), // Raw 0-1000 (or 3000)
+                    loudnessEnhancerStrength = lStrength.toFloat(), // Raw 0-1000
                     isBassBoostDismissed = bbDismissed,
                     isVirtualizerDismissed = vDismissed,
                     isLoudnessDismissed = lDismissed,
@@ -410,7 +410,7 @@ class EqualizerViewModel @Inject constructor(
     }
 
     fun setLoudnessEnhancerStrength(strength: Int) {
-        val clampedStrength = strength.coerceIn(0, 3000)
+        val clampedStrength = strength.coerceIn(0, 1000)
         equalizerManager.setLoudnessEnhancerStrength(clampedStrength)
         _uiState.update { current ->
             current.copy(loudnessEnhancerStrength = clampedStrength.toFloat())
@@ -480,6 +480,24 @@ class EqualizerViewModel @Inject constructor(
     }
     
     override fun onCleared() {
+        // Flush latest state synchronously to avoid losing debounced values when the screen/app closes.
+        runCatching {
+            kotlinx.coroutines.runBlocking {
+                val latest = _uiState.value
+                userPreferencesRepository.setEqualizerEnabled(latest.isEnabled)
+                userPreferencesRepository.setEqualizerPreset(latest.currentPreset.name)
+                userPreferencesRepository.setEqualizerCustomBands(equalizerManager.bandLevels.value)
+                userPreferencesRepository.setBassBoostEnabled(latest.bassBoostEnabled)
+                userPreferencesRepository.setBassBoostStrength(latest.bassBoostStrength.toInt().coerceIn(0, 1000))
+                userPreferencesRepository.setVirtualizerEnabled(latest.virtualizerEnabled)
+                userPreferencesRepository.setVirtualizerStrength(latest.virtualizerStrength.toInt().coerceIn(0, 1000))
+                userPreferencesRepository.setLoudnessEnhancerEnabled(latest.loudnessEnhancerEnabled)
+                userPreferencesRepository.setLoudnessEnhancerStrength(latest.loudnessEnhancerStrength.toInt().coerceIn(0, 1000))
+            }
+        }.onFailure { error ->
+            Timber.tag(TAG).w(error, "Failed to flush equalizer state during onCleared")
+        }
+
         persistBandLevelsJob?.cancel()
         persistBassBoostJob?.cancel()
         persistVirtualizerJob?.cancel()

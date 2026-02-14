@@ -1249,7 +1249,7 @@ private fun EffectControlsSection(
             EffectCard(
                 title = "Loudness",
                 value = loudnessStrength,
-                valueRange = 0f..3000f,
+                valueRange = 0f..1000f,
                 isEnabled = loudnessEnabled,
                 onValueChange = { onLoudnessStrengthChange(it) },
                 onEnabledChange = onLoudnessEnabledChange

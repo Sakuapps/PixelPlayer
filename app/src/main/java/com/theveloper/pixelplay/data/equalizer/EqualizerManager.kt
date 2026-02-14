@@ -25,6 +25,7 @@ class EqualizerManager @Inject constructor() {
         private const val NUM_BANDS = 10
         private const val MIN_LEVEL = -15
         private const val MAX_LEVEL = 15
+        private const val MAX_LOUDNESS_GAIN_MB = 1000
     }
     
     private var equalizer: Equalizer? = null
@@ -161,8 +162,8 @@ class EqualizerManager @Inject constructor() {
             // Initialize Loudness Enhancer (usually robust, but let's be safe)
             loudnessEnhancer = try {
                 android.media.audiofx.LoudnessEnhancer(audioSessionId).apply {
+                    setTargetGain(_loudnessEnhancerStrength.value.coerceIn(0, MAX_LOUDNESS_GAIN_MB))
                     enabled = _loudnessEnhancerEnabled.value
-                    setTargetGain(_loudnessEnhancerStrength.value)
                 }
             } catch (e: Exception) {
                 Timber.tag(TAG).w(e, "LoudnessEnhancer not supported on this device")
@@ -175,6 +176,7 @@ class EqualizerManager @Inject constructor() {
             val deviceBandCount = equalizer?.numberOfBands?.toInt() ?: 0
             Timber.tag(TAG).d("Device supports $deviceBandCount bands, UI has ${_bandLevels.value.size} bands")
             applyBandLevels(_bandLevels.value)
+            applyCurrentEffectStateToAttachedEffects()
             
             Timber.tag(TAG).d("Effects attached successfully. EQ bands: ${equalizer?.numberOfBands}, Range: $minEqLevel to $maxEqLevel")
             
@@ -302,14 +304,10 @@ class EqualizerManager @Inject constructor() {
 
     /**
      * Sets loudness enhancer strength (gain in mB).
-     * Typically 0 to 1000mB (10dB) is safe range, but API allows implies integers.
-     * We'll assume the UI passes a normalized 0-1000 range mapping to gain.
+     * 0 to 1000mB (10dB) is used as a stable cross-device range.
      */
     fun setLoudnessEnhancerStrength(strength: Int) {
-        val clampedStrength = strength.coerceIn(0, 3000) // Allow up to 3000mB? Let's check user request. Slider normal logic.
-        // User request doesn't specify limit. LoudnessEnhancer setTargetGain takes milliBels.
-        // Let's assume UI slider 0-1000 maps to 0-1000mB for simplicity.
-        // Actually, user asked for "loudness", usually LoudnessEnhancer.
+        val clampedStrength = strength.coerceIn(0, MAX_LOUDNESS_GAIN_MB)
         _loudnessEnhancerStrength.value = clampedStrength
 
         try {
@@ -340,7 +338,7 @@ class EqualizerManager @Inject constructor() {
         _virtualizerEnabled.value = virtualizerEnabled
         _virtualizerStrength.value = virtualizerStrength
         _loudnessEnhancerEnabled.value = loudnessEnabled
-        _loudnessEnhancerStrength.value = loudnessStrength
+        _loudnessEnhancerStrength.value = loudnessStrength.coerceIn(0, MAX_LOUDNESS_GAIN_MB)
         
         val preset = if (presetName == "custom") {
             EqualizerPreset.custom(customBands)
@@ -355,8 +353,40 @@ class EqualizerManager @Inject constructor() {
         if (equalizer != null) {
             equalizer?.enabled = enabled
             applyBandLevels(preset.bandLevels)
-            setBassBoostStrength(bassBoostStrength)
-            setVirtualizerStrength(virtualizerStrength)
+            applyCurrentEffectStateToAttachedEffects()
+        }
+    }
+
+    private fun applyCurrentEffectStateToAttachedEffects() {
+        try {
+            bassBoost?.apply {
+                enabled = _bassBoostEnabled.value
+                if (strengthSupported) {
+                    setStrength(_bassBoostStrength.value.coerceIn(0, 1000).toShort())
+                }
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Failed applying bass boost state")
+        }
+
+        try {
+            virtualizer?.apply {
+                enabled = _virtualizerEnabled.value
+                if (strengthSupported) {
+                    setStrength(_virtualizerStrength.value.coerceIn(0, 1000).toShort())
+                }
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Failed applying virtualizer state")
+        }
+
+        try {
+            loudnessEnhancer?.apply {
+                setTargetGain(_loudnessEnhancerStrength.value.coerceIn(0, MAX_LOUDNESS_GAIN_MB))
+                enabled = _loudnessEnhancerEnabled.value
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Failed applying loudness state")
         }
     }
     
