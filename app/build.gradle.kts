@@ -12,7 +12,7 @@ plugins {
 
 android {
     namespace = "com.theveloper.pixelplay"
-    compileSdk = 35
+    compileSdk = 36
 
     androidResources {
         noCompress.add("tflite")
@@ -29,7 +29,7 @@ android {
     defaultConfig {
         applicationId = "com.theveloper.pixelplay"
         minSdk = 29
-        targetSdk = 35
+        targetSdk = 36
         versionCode = (project.findProperty("APP_VERSION_CODE") as String).toInt()
         versionName = project.findProperty("APP_VERSION_NAME") as String
 
@@ -61,19 +61,17 @@ android {
     }
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "2.1.0"
-        // Para habilitar informes de composición (legibles):
+
     }
     buildFeatures {
         compose = true
         buildConfig = true
     }
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
         // Aquí es donde debes agregar freeCompilerArgs para los informes del compilador de Compose.
         freeCompilerArgs += listOf(
             "-P",
