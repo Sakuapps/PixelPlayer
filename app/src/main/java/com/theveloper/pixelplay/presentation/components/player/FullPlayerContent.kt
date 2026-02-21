@@ -910,7 +910,7 @@ fun FullPlayerContent(
         exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut()
     ) {
         LyricsSheet(
-            stablePlayerStateFlow = playerViewModel.stablePlayerStateInfrequent,
+            stablePlayerStateFlow = playerViewModel.stablePlayerState,
             playbackPositionFlow = playerViewModel.currentPlaybackPosition,
             lyricsSearchUiState = lyricsSearchUiState,
             resetLyricsForCurrentSong = {
@@ -1391,6 +1391,7 @@ private fun EfficientSlider(
         value = valueState.value,
         onValueChange = onValueChange,
         onValueChangeFinished = onValueChangeFinished,
+        interactionSource = interactionSource,
         activeTrackColor = activeTrackColor,
         inactiveTrackColor = inactiveTrackColor,
         thumbColor = thumbColor,
