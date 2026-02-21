@@ -4,7 +4,6 @@ plugins {
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.dagger.hilt.android)
     kotlin("plugin.serialization") version "2.3.10"
-    alias(libs.plugins.baselineprofile)
     id("kotlin-parcelize")
 }
 
@@ -92,7 +91,6 @@ androidComponents {
 }
 
 dependencies {
-    "baselineProfile"(project(":baselineprofile"))
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 
     implementation(libs.androidx.core.ktx)
