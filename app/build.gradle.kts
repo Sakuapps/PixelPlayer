@@ -1,9 +1,9 @@
 plugins {
     alias(libs.plugins.android.application)
-    id("com.google.devtools.ksp") version "2.1.0-1.0.29"
+    id("com.google.devtools.ksp") version "2.3.6"
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.dagger.hilt.android)
-    kotlin("plugin.serialization") version "2.1.0"
+    kotlin("plugin.serialization") version "2.3.10"
     alias(libs.plugins.jetbrains.kotlin.android)
     alias(libs.plugins.baselineprofile)
     // id("com.google.protobuf") version "0.9.5" // Eliminado plugin de Protobuf
@@ -192,7 +192,7 @@ dependencies {
 
     //Material3
     implementation(libs.material3)
-    implementation("androidx.compose.material3:material3-window-size-class:1.3.1")
+    implementation("androidx.compose.material3:material3-window-size-class:1.4.0")
 
     //Coil
     implementation(libs.coil.compose)
