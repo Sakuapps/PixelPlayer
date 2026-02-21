@@ -25,6 +25,9 @@ import androidx.media3.session.MediaController
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.media3.common.Timeline
 import androidx.media3.session.SessionCommand
@@ -320,6 +323,12 @@ class PlayerViewModel @Inject constructor(
     val bottomBarHeight: StateFlow<Int> = _bottomBarHeight.asStateFlow()
     private val _predictiveBackCollapseFraction = MutableStateFlow(0f)
     val predictiveBackCollapseFraction: StateFlow<Float> = _predictiveBackCollapseFraction.asStateFlow()
+    private val _predictiveBackSwipeEdge = MutableStateFlow<Int?>(null)
+    val predictiveBackSwipeEdge: StateFlow<Int?> = _predictiveBackSwipeEdge.asStateFlow()
+    private val _isQueueSheetVisible = MutableStateFlow(false)
+    val isQueueSheetVisible: StateFlow<Boolean> = _isQueueSheetVisible.asStateFlow()
+    private val _isCastSheetVisible = MutableStateFlow(false)
+    val isCastSheetVisible: StateFlow<Boolean> = _isCastSheetVisible.asStateFlow()
 
     val playerContentExpansionFraction = Animatable(0f)
 
@@ -682,9 +691,12 @@ class PlayerViewModel @Inject constructor(
     val albumsFlow: StateFlow<ImmutableList<Album>> = libraryStateHolder.albums
     val artistsFlow: StateFlow<ImmutableList<Artist>> = libraryStateHolder.artists
 
+    var searchQuery by mutableStateOf("")
+        private set
 
-
-
+    fun updateSearchQuery(query: String) {
+        searchQuery = query
+    }
 
     private var mediaController: MediaController? = null
     private val _isMediaControllerReady = MutableStateFlow(false)
@@ -947,6 +959,23 @@ class PlayerViewModel @Inject constructor(
 
     fun updatePredictiveBackCollapseFraction(fraction: Float) {
         _predictiveBackCollapseFraction.value = fraction.coerceIn(0f, 1f)
+    }
+
+    fun updatePredictiveBackSwipeEdge(edge: Int?) {
+        _predictiveBackSwipeEdge.value = edge
+    }
+
+    fun resetPredictiveBackState() {
+        _predictiveBackCollapseFraction.value = 0f
+        _predictiveBackSwipeEdge.value = null
+    }
+
+    fun updateQueueSheetVisibility(visible: Boolean) {
+        _isQueueSheetVisible.value = visible
+    }
+
+    fun updateCastSheetVisibility(visible: Boolean) {
+        _isCastSheetVisible.value = visible
     }
 
     // Helper to resolve stored sort keys against the allowed group
@@ -1561,7 +1590,7 @@ class PlayerViewModel @Inject constructor(
                 playSongs(playbackContext, song, queueName, null)
             }
         }
-        _predictiveBackCollapseFraction.value = 0f
+        resetPredictiveBackState()
     }
 
     fun showAndPlaySong(song: Song) {
@@ -1622,16 +1651,74 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    private var queueItemUndoTimerJob: Job? = null
+
     fun removeSongFromQueue(songId: String) {
         mediaController?.let { controller ->
             val currentQueue = _playerUiState.value.currentPlaybackQueue
             val indexToRemove = currentQueue.indexOfFirst { it.id == songId }
 
             if (indexToRemove != -1) {
+                val removedSong = currentQueue[indexToRemove]
                 // Command the player to remove the item. This is the source of truth for playback.
                 controller.removeMediaItem(indexToRemove)
 
+                // Store undo state
+                _playerUiState.update {
+                    it.copy(
+                        showQueueItemUndoBar = true,
+                        lastRemovedQueueSong = removedSong,
+                        lastRemovedQueueIndex = indexToRemove
+                    )
+                }
+
+                // Auto-hide the undo bar after a delay
+                queueItemUndoTimerJob?.cancel()
+                queueItemUndoTimerJob = viewModelScope.launch {
+                    delay(4000L)
+                    if (_playerUiState.value.showQueueItemUndoBar) {
+                        _playerUiState.update {
+                            it.copy(
+                                showQueueItemUndoBar = false,
+                                lastRemovedQueueSong = null,
+                                lastRemovedQueueIndex = -1
+                            )
+                        }
+                    }
+                }
             }
+        }
+    }
+
+    fun undoRemoveSongFromQueue() {
+        val song = _playerUiState.value.lastRemovedQueueSong ?: return
+        val index = _playerUiState.value.lastRemovedQueueIndex
+        if (index < 0) return
+
+        mediaController?.let { controller ->
+            val mediaItem = MediaItemBuilder.build(song)
+            val insertAt = index.coerceAtMost(controller.mediaItemCount)
+            controller.addMediaItem(insertAt, mediaItem)
+        }
+
+        queueItemUndoTimerJob?.cancel()
+        _playerUiState.update {
+            it.copy(
+                showQueueItemUndoBar = false,
+                lastRemovedQueueSong = null,
+                lastRemovedQueueIndex = -1
+            )
+        }
+    }
+
+    fun hideQueueItemUndoBar() {
+        queueItemUndoTimerJob?.cancel()
+        _playerUiState.update {
+            it.copy(
+                showQueueItemUndoBar = false,
+                lastRemovedQueueSong = null,
+                lastRemovedQueueIndex = -1
+            )
         }
     }
 
@@ -1648,23 +1735,29 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    fun togglePlayerSheetState() {
+    fun togglePlayerSheetState(resetPredictiveState: Boolean = true) {
         _sheetState.value = if (_sheetState.value == PlayerSheetState.COLLAPSED) {
             PlayerSheetState.EXPANDED
         } else {
             PlayerSheetState.COLLAPSED
         }
-        _predictiveBackCollapseFraction.value = 0f
+        if (resetPredictiveState) {
+            resetPredictiveBackState()
+        }
     }
 
-    fun expandPlayerSheet() {
+    fun expandPlayerSheet(resetPredictiveState: Boolean = true) {
         _sheetState.value = PlayerSheetState.EXPANDED
-        _predictiveBackCollapseFraction.value = 0f
+        if (resetPredictiveState) {
+            resetPredictiveBackState()
+        }
     }
 
-    fun collapsePlayerSheet() {
+    fun collapsePlayerSheet(resetPredictiveState: Boolean = true) {
         _sheetState.value = PlayerSheetState.COLLAPSED
-        _predictiveBackCollapseFraction.value = 0f
+        if (resetPredictiveState) {
+            resetPredictiveBackState()
+        }
     }
 
     fun triggerArtistNavigationFromPlayer(artistId: Long) {
@@ -1709,10 +1802,27 @@ class PlayerViewModel @Inject constructor(
     }
 
     private fun resolveSongFromMediaItem(mediaItem: MediaItem): Song? {
-        _playerUiState.value.currentPlaybackQueue.find { it.id == mediaItem.mediaId }?.let { return it }
-        libraryStateHolder.allSongs.value.find { it.id == mediaItem.mediaId }?.let { return it }
+        val resolvedSong =
+            libraryStateHolder.allSongs.value.find { it.id == mediaItem.mediaId }
+                ?: _playerUiState.value.currentPlaybackQueue.find { it.id == mediaItem.mediaId }
+                ?: mediaMapper.resolveSongFromMediaItem(mediaItem)
 
-        return mediaMapper.resolveSongFromMediaItem(mediaItem)
+        return resolvedSong?.let { normalizeArtworkForResolvedSong(it, mediaItem) }
+    }
+
+    private fun normalizeArtworkForResolvedSong(song: Song, mediaItem: MediaItem): Song {
+        val metadataArtwork =
+            mediaItem.mediaMetadata.artworkUri?.toString()?.takeIf { it.isNotBlank() }
+                ?: mediaItem.mediaMetadata.extras
+                    ?.getString(MediaItemBuilder.EXTERNAL_EXTRA_ALBUM_ART)
+                    ?.takeIf { it.isNotBlank() }
+
+        return when {
+            metadataArtwork == null && song.albumArtUriString != null -> song.copy(albumArtUriString = null)
+            metadataArtwork != null && song.albumArtUriString != metadataArtwork ->
+                song.copy(albumArtUriString = metadataArtwork)
+            else -> song
+        }
     }
 
     private fun updateCurrentPlaybackQueueFromPlayer(playerCtrl: MediaController?) {

@@ -10,7 +10,6 @@
     <string name="cant_find_lyrics">Couldn\'t find lyrics for this song.</string>
     <string name="lyrics_provided_by">Lyrics provided by</string>
     <string name="lrclib_uri">https://lrclib.net/</string>
-    <string name="glance_widget_description">Control your music from the home screen.</string>
     <string name="all_files_access_title">Permiso Especial Requerido</string>
     <string name="all_files_access_description">Para poder editar los metadatos de tus canciones (archivos .mp3), PixelPlayer necesita un permiso especial de acceso a todos los archivos. Esto nos permitirá modificar las etiquetas de tus pistas directamente. Por favor, concede este permiso en la siguiente pantalla para habilitar la edición de metadatos.</string>
     <string name="grant_permission_button">Conceder Permiso</string>
@@ -100,4 +99,10 @@
     <string name="error_loading_artist">Error loading artist data: %s</string>
     <string name="could_not_find_artist">Could not find the artist</string>
     <string name="no_valid_songs">No valid songs found to play</string>
+
+    <!-- Widgets -->
+    <string name="glance_widget_description">Responsive widget that adapts to its size</string>
+    <string name="widget_bar_4x1_desc">Compact player bar</string>
+    <string name="widget_control_4x2_desc">Full controls with shuffle and repeat</string>
+    <string name="widget_grid_2x2_desc">Minimalist square player</string>
 </resources>

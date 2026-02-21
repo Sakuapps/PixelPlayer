@@ -2,6 +2,8 @@
 
 package com.theveloper.pixelplay.presentation.screens
 
+import com.theveloper.pixelplay.presentation.navigation.navigateSafely
+
 import android.os.Trace
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalAnimationApi
@@ -40,6 +42,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ViewList
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -48,7 +51,6 @@ import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material.icons.rounded.ViewList
 import androidx.compose.material.icons.rounded.ViewModule
 import com.theveloper.pixelplay.presentation.components.ToggleSegmentButton
 import androidx.compose.material3.LoadingIndicator
@@ -56,11 +58,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -484,7 +485,7 @@ fun LibraryScreen(
                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                         ),
                         onClick = {
-                            navController.navigate(Screen.Settings.route)
+                            navController.navigateSafely(Screen.Settings.route)
                         }
                     ) {
                         Icon(
@@ -525,14 +526,14 @@ fun LibraryScreen(
             ) {
                 if (!isCompactNavigation) {
                     val showTabIndicator = false
-                    ScrollableTabRow(
+                    PrimaryScrollableTabRow(
                         selectedTabIndex = currentTabIndex,
                         containerColor = Color.Transparent,
                         edgePadding = 12.dp,
-                        indicator = { tabPositions ->
-                            if (showTabIndicator && currentTabIndex < tabPositions.size) {
+                        indicator = {
+                            if (showTabIndicator) {
                                 TabRowDefaults.PrimaryIndicator(
-                                    modifier = Modifier.tabIndicatorOffset(tabPositions[currentTabIndex]),
+                                    modifier = Modifier.tabIndicatorOffset(selectedTabIndex = currentTabIndex),
                                     height = 3.dp,
                                     color = MaterialTheme.colorScheme.primary
                                 )
@@ -813,7 +814,7 @@ fun LibraryScreen(
                                                 activeCornerRadius = 32.dp,
                                                 onClick = { playerViewModel.setAlbumsListView(true) },
                                                 text = "List",
-                                                imageVector = Icons.Rounded.ViewList
+                                                imageVector = Icons.AutoMirrored.Rounded.ViewList
                                             )
                                         }
                                     }
@@ -920,7 +921,7 @@ fun LibraryScreen(
 
                                         val stableOnAlbumClick: (Long) -> Unit = remember(navController) {
                                             { albumId: Long ->
-                                                navController.navigate(Screen.AlbumDetail.createRoute(albumId))
+                                                navController.navigateSafely(Screen.AlbumDetail.createRoute(albumId))
                                             }
                                         }
                                         LibraryAlbumsTab(
@@ -945,7 +946,7 @@ fun LibraryScreen(
                                             playerViewModel = playerViewModel,
                                             bottomBarHeight = bottomBarHeightDp,
                                             onArtistClick = { artistId ->
-                                                navController.navigate(
+                                                navController.navigateSafely(
                                                     Screen.ArtistDetail.createRoute(
                                                         artistId
                                                     )
@@ -1017,7 +1018,7 @@ fun LibraryScreen(
                                                 onFolderClick = { folderPath -> playerViewModel.navigateToFolder(folderPath) },
                                                 onFolderAsPlaylistClick = { folder ->
                                                     val encodedPath = Uri.encode(folder.path)
-                                                    navController.navigate(
+                                                    navController.navigateSafely(
                                                         Screen.PlaylistDetail.createRoute(
                                                             "${PlaylistViewModel.FOLDER_PLAYLIST_PREFIX}$encodedPath"
                                                         )
@@ -1165,7 +1166,7 @@ fun LibraryScreen(
         },
         isAiEnabled = hasGeminiApiKey,
         onSetupAiClick = {
-            navController.navigate(Screen.SettingsCategory.createRoute("ai"))
+            navController.navigateSafely(Screen.SettingsCategory.createRoute("ai"))
         }
     )
 
@@ -1260,11 +1261,11 @@ fun LibraryScreen(
                 },
                 onDeleteFromDevice = playerViewModel::deleteFromDevice,
                 onNavigateToAlbum = {
-                    navController.navigate(Screen.AlbumDetail.createRoute(currentSong.albumId))
+                    navController.navigateSafely(Screen.AlbumDetail.createRoute(currentSong.albumId))
                     showSongInfoBottomSheet = false
                 },
                 onNavigateToArtist = {
-                    navController.navigate(Screen.ArtistDetail.createRoute(currentSong.artistId))
+                    navController.navigateSafely(Screen.ArtistDetail.createRoute(currentSong.artistId))
                     showSongInfoBottomSheet = false
                 },
                 onEditSong = { newTitle, newArtist, newAlbum, newGenre, newLyrics, newTrackNumber, coverArtUpdate ->

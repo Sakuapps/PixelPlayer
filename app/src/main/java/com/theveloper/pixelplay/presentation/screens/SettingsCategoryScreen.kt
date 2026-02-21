@@ -1,5 +1,7 @@
 package com.theveloper.pixelplay.presentation.screens
 
+import com.theveloper.pixelplay.presentation.navigation.navigateSafely
+
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -7,7 +9,6 @@ import android.os.Environment
 import android.provider.Settings
 import android.text.format.Formatter
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -151,7 +152,6 @@ import com.theveloper.pixelplay.presentation.components.FileExplorerDialog
 import com.theveloper.pixelplay.presentation.components.MiniPlayerHeight
 import com.theveloper.pixelplay.presentation.model.SettingsCategory
 import com.theveloper.pixelplay.presentation.navigation.Screen
-import com.theveloper.pixelplay.presentation.viewmodel.PlayerSheetState
 import com.theveloper.pixelplay.presentation.viewmodel.LyricsRefreshProgress
 import com.theveloper.pixelplay.presentation.viewmodel.PlayerViewModel
 import com.theveloper.pixelplay.presentation.viewmodel.SettingsViewModel
@@ -170,11 +170,6 @@ fun SettingsCategoryScreen(
 ) {
     val category = SettingsCategory.fromId(categoryId) ?: return
     val context = LocalContext.current
-    val playerSheetState by playerViewModel.sheetState.collectAsState()
-
-    BackHandler(enabled = playerSheetState == PlayerSheetState.EXPANDED) {
-        playerViewModel.collapsePlayerSheet()
-    }
     
     // State Collection (Duplicated from SettingsScreen for now to ensure functionality)
     val uiState by settingsViewModel.uiState.collectAsState()
@@ -401,7 +396,7 @@ fun SettingsCategoryScreen(
                                     subtitle = "Multi-artist parsing and organization options.",
                                     leadingIcon = { Icon(Icons.Outlined.Person, null, tint = MaterialTheme.colorScheme.secondary) },
                                     trailingIcon = { Icon(Icons.Rounded.ChevronRight, "Open", tint = MaterialTheme.colorScheme.onSurfaceVariant) },
-                                    onClick = { navController.navigate(Screen.ArtistSettings.route) }
+                                    onClick = { navController.navigateSafely(Screen.ArtistSettings.route) }
                                 )
                             }
 
@@ -509,7 +504,7 @@ fun SettingsCategoryScreen(
                                     subtitle = "Current: ${uiState.albumArtPaletteStyle.label}. Open live preview and choose style.",
                                     leadingIcon = { Icon(Icons.Outlined.Style, null, tint = MaterialTheme.colorScheme.secondary) },
                                     trailingIcon = { Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
-                                    onClick = { navController.navigate(Screen.PaletteStyle.route) }
+                                    onClick = { navController.navigateSafely(Screen.PaletteStyle.route) }
                                 )
                                 ThemeSelectorItem(
                                     label = "Carousel Style",
@@ -561,7 +556,7 @@ fun SettingsCategoryScreen(
                                     subtitle = "Adjust the corner radius of the navigation bar.",
                                     leadingIcon = { Icon(painterResource(R.drawable.rounded_rounded_corner_24), null, tint = MaterialTheme.colorScheme.secondary) },
                                     trailingIcon = { Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
-                                    onClick = { navController.navigate("nav_bar_corner_radius") }
+                                    onClick = { navController.navigateSafely("nav_bar_corner_radius") }
                                 )
                             }
 
@@ -681,7 +676,7 @@ fun SettingsCategoryScreen(
                                     SliderSettingsItem(
                                         label = "Crossfade Duration",
                                         value = uiState.crossfadeDuration.toFloat(),
-                                        valueRange = 2000f..12000f,
+                                        valueRange = 1000f..12000f,
                                         onValueChange = { settingsViewModel.setCrossfadeDuration(it.toInt()) },
                                         valueText = { value -> "${(value / 1000).toInt()}s" }
                                     )
@@ -871,7 +866,7 @@ fun SettingsCategoryScreen(
                                     subtitle = "Player UI loading experiments and toggles.",
                                     leadingIcon = { Icon(Icons.Rounded.Science, null, tint = MaterialTheme.colorScheme.secondary) },
                                     trailingIcon = { Icon(Icons.Rounded.ChevronRight, "Open", tint = MaterialTheme.colorScheme.onSurfaceVariant) },
-                                    onClick = { navController.navigate(Screen.Experimental.route) }
+                                    onClick = { navController.navigateSafely(Screen.Experimental.route) }
                                 )
                                 SettingsItem(
                                     title = "Test Setup Flow",
@@ -934,7 +929,7 @@ fun SettingsCategoryScreen(
                                     subtitle = "App version, credits, and more.",
                                     leadingIcon = { Icon(Icons.Outlined.Info, null, tint = MaterialTheme.colorScheme.secondary) },
                                     trailingIcon = { Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
-                                    onClick = { navController.navigate("about") }
+                                    onClick = { navController.navigateSafely("about") }
                                 )
                             }
                         }

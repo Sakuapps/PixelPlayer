@@ -1,5 +1,7 @@
 package com.theveloper.pixelplay.presentation.screens
 
+import com.theveloper.pixelplay.presentation.navigation.navigateSafely
+
 import android.content.Intent
 import androidx.activity.compose.ReportDrawnWhen
 import androidx.compose.foundation.background
@@ -179,7 +181,7 @@ fun HomeScreen(
             topBar = {
                 HomeGradientTopBar(
                     onNavigationIconClick = {
-                        navController.navigate(Screen.Settings.route)
+                        navController.navigateSafely(Screen.Settings.route)
                     },
                     onMoreOptionsClick = {
                         showChangelogBottomSheet = true
@@ -260,7 +262,7 @@ fun HomeScreen(
                         DailyMixSection(
                             songs = dailyMixSongs,
                             onClickOpen = {
-                                navController.navigate(Screen.DailyMixScreen.route)
+                                navController.navigateSafely(Screen.DailyMixScreen.route)
                             },
                             playerViewModel = playerViewModel
                         )
@@ -281,7 +283,7 @@ fun HomeScreen(
                                 }
                             },
                             onOpenAllClick = {
-                                navController.navigate(Screen.RecentlyPlayed.route)
+                                navController.navigateSafely(Screen.RecentlyPlayed.route)
                             },
                             currentSongId = currentSong?.id,
                             contentPadding = PaddingValues(start = 8.dp, end = 24.dp)
@@ -292,7 +294,7 @@ fun HomeScreen(
                 item(key = "listening_stats_preview") {
                     StatsOverviewCard(
                         summary = weeklyStats,
-                        onClick = { navController.navigate(Screen.Stats.route) }
+                        onClick = { navController.navigateSafely(Screen.Stats.route) }
                     )
                 }
             }
@@ -328,7 +330,7 @@ fun HomeScreen(
                     }.invokeOnCompletion {
                         if (!sheetState.isVisible) {
                             showOptionsBottomSheet = false
-                            navController.navigate(Screen.DJSpace.route)
+                            navController.navigateSafely(Screen.DJSpace.route)
                         }
                     }
                 }
@@ -358,7 +360,7 @@ fun HomeScreen(
             onDismissRequest = { showStreamingProviderSheet = false },
             isNeteaseLoggedIn = isNeteaseLoggedIn,
             onNavigateToNeteaseDashboard = {
-                navController.navigate(Screen.NeteaseDashboard.route)
+                navController.navigateSafely(Screen.NeteaseDashboard.route)
             }
         )
     }

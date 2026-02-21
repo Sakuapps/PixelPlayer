@@ -55,7 +55,7 @@ enum class TransitionSource {
  */
 data class TransitionSettings(
     val mode: TransitionMode = TransitionMode.OVERLAP,
-    val durationMs: Int = 6000,
+    val durationMs: Int = 2000,
     val curveIn: Curve = Curve.S_CURVE,
     val curveOut: Curve = Curve.S_CURVE,
 )

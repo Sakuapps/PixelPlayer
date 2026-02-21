@@ -37,6 +37,7 @@ import com.theveloper.pixelplay.data.preferences.UserPreferencesRepository
 import com.theveloper.pixelplay.data.repository.MusicRepository
 import com.theveloper.pixelplay.data.service.player.DualPlayerEngine
 import com.theveloper.pixelplay.data.service.player.TransitionController
+import com.theveloper.pixelplay.ui.glancewidget.ControlWidget4x2
 import com.theveloper.pixelplay.ui.glancewidget.PixelPlayGlanceWidget
 import com.theveloper.pixelplay.ui.glancewidget.PlayerActions
 import com.theveloper.pixelplay.ui.glancewidget.PlayerInfoStateDefinition
@@ -54,6 +55,16 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.ByteArrayOutputStream
 import com.theveloper.pixelplay.data.equalizer.EqualizerManager
+import com.theveloper.pixelplay.data.model.WidgetThemeColors
+import com.theveloper.pixelplay.data.preferences.AlbumArtPaletteStyle
+import com.theveloper.pixelplay.presentation.viewmodel.ColorSchemeProcessor
+import androidx.compose.ui.graphics.toArgb
+import com.theveloper.pixelplay.ui.glancewidget.BarWidget4x1
+import com.theveloper.pixelplay.ui.glancewidget.GridWidget2x2
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import com.theveloper.pixelplay.data.preferences.ThemePreference
+import com.theveloper.pixelplay.presentation.viewmodel.ColorSchemePair
 
 import javax.inject.Inject
 
@@ -74,6 +85,8 @@ class MusicService : MediaSessionService() {
     lateinit var userPreferencesRepository: UserPreferencesRepository
     @Inject
     lateinit var equalizerManager: EqualizerManager
+    @Inject
+    lateinit var colorSchemeProcessor: ColorSchemeProcessor
 
     private var favoriteSongIds = emptySet<String>()
     private var mediaSession: MediaSession? = null
@@ -326,6 +339,21 @@ class MusicService : MediaSessionService() {
                         }
                     }
                 }
+                PlayerActions.SHUFFLE -> {
+                    val newState = !isManualShuffleEnabled
+                    mediaSession?.let { session ->
+                        updateManualShuffleState(session, enabled = newState, broadcast = true)
+                    }
+                }
+                PlayerActions.REPEAT -> {
+                    val newMode = when (player.repeatMode) {
+                        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ONE
+                        Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_ALL
+                        else -> Player.REPEAT_MODE_OFF
+                    }
+                    player.repeatMode = newMode
+                    requestWidgetFullUpdate(force = true)
+                }
                 ACTION_SLEEP_TIMER_EXPIRED -> {
                     Timber.tag(TAG).d("Sleep timer expired action received. Pausing player.")
                     player.pause()
@@ -362,10 +390,12 @@ class MusicService : MediaSessionService() {
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
             Timber.tag("MusicService")
                 .d("playerListener.onShuffleModeEnabledChanged: $shuffleModeEnabled")
+            requestWidgetFullUpdate(force = true)
             mediaSession?.let { refreshMediaSessionUi(it) }
         }
 
         override fun onRepeatModeChanged(repeatMode: Int) {
+            requestWidgetFullUpdate(force = true)
             mediaSession?.let { refreshMediaSessionUi(it) }
         }
 
@@ -445,6 +475,8 @@ class MusicService : MediaSessionService() {
         val player = engine.masterPlayer
         val currentItem = withContext(Dispatchers.Main) { player.currentMediaItem }
         val isPlaying = withContext(Dispatchers.Main) { player.isPlaying }
+        val shuffleEnabled = isManualShuffleEnabled // Manual shuffle for sync with PlayerViewModel
+        val repeatMode = withContext(Dispatchers.Main) { player.repeatMode }
         val currentPosition = withContext(Dispatchers.Main) { player.currentPosition }
         val totalDuration = withContext(Dispatchers.Main) { player.duration.coerceAtLeast(0) }
 
@@ -455,6 +487,43 @@ class MusicService : MediaSessionService() {
         val artworkData = currentItem?.mediaMetadata?.artworkData
 
         val (artBytes, artUriString) = getAlbumArtForWidget(artworkData, artworkUri)
+
+        val playerTheme = withContext(Dispatchers.IO) {
+            userPreferencesRepository.playerThemePreferenceFlow.first()
+        }
+
+        val paletteStyle = withContext(Dispatchers.IO) {
+            AlbumArtPaletteStyle.fromStorageKey(userPreferencesRepository.albumArtPaletteStyleFlow.first().storageKey)
+        }
+
+        val schemePair: ColorSchemePair? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && playerTheme == ThemePreference.DYNAMIC) {
+             ColorSchemePair(
+                 light = dynamicLightColorScheme(applicationContext),
+                 dark = dynamicDarkColorScheme(applicationContext)
+             )
+        } else if (artUriString != null) {
+            colorSchemeProcessor.getOrGenerateColorScheme(artUriString, paletteStyle)
+        } else null
+
+        val widgetColors = schemePair?.let {
+            WidgetThemeColors(
+                lightSurfaceContainer = it.light.primaryContainer.toArgb(),
+                lightTitle = it.light.onPrimaryContainer.toArgb(),
+                lightArtist = it.light.onPrimaryContainer.copy(alpha = 0.7f).toArgb(),
+                lightPlayPauseBackground = it.light.primary.toArgb(),
+                lightPlayPauseIcon = it.light.onPrimary.toArgb(),
+                lightPrevNextBackground = it.light.onPrimary.toArgb(),
+                lightPrevNextIcon = it.light.primary.toArgb(),
+                
+                darkSurfaceContainer = it.dark.primaryContainer.toArgb(),
+                darkTitle = it.dark.onPrimaryContainer.toArgb(),
+                darkArtist = it.dark.onPrimaryContainer.copy(alpha = 0.7f).toArgb(),
+                darkPlayPauseBackground = it.dark.primary.toArgb(),
+                darkPlayPauseIcon = it.dark.onPrimary.toArgb(),
+                darkPrevNextBackground = it.dark.onPrimary.toArgb(),
+                darkPrevNextIcon = it.dark.primary.toArgb()
+            )
+        }
 
         val isFavorite = false
 //        val isFavorite = mediaId?.let {
@@ -500,7 +569,10 @@ class MusicService : MediaSessionService() {
             currentPositionMs = currentPosition,
             totalDurationMs = totalDuration,
             isFavorite = isFavorite,
-            queue = queueItems
+            queue = queueItems,
+            themeColors = widgetColors,
+            isShuffleEnabled = shuffleEnabled,
+            repeatMode = repeatMode
         )
     }
 
@@ -526,13 +598,33 @@ class MusicService : MediaSessionService() {
     private suspend fun updateGlanceWidgets(playerInfo: PlayerInfo) = withContext(Dispatchers.IO) {
         try {
             val glanceManager = GlanceAppWidgetManager(applicationContext)
+
             val glanceIds = glanceManager.getGlanceIds(PixelPlayGlanceWidget::class.java)
-            if (glanceIds.isNotEmpty()) {
-                glanceIds.forEach { id ->
-                    updateAppWidgetState(applicationContext, PlayerInfoStateDefinition, id) { playerInfo }
-                }
-                PixelPlayGlanceWidget().update(applicationContext, glanceIds.first())
-                Log.d(TAG, "Widget actualizado: ${playerInfo.songTitle}")
+            glanceIds.forEach { id ->
+                updateAppWidgetState(applicationContext, PlayerInfoStateDefinition, id) { playerInfo }
+                PixelPlayGlanceWidget().update(applicationContext, id)
+            }
+
+            val barGlanceIds = glanceManager.getGlanceIds(BarWidget4x1::class.java)
+            barGlanceIds.forEach { id ->
+                updateAppWidgetState(applicationContext, PlayerInfoStateDefinition, id) { playerInfo }
+                BarWidget4x1().update(applicationContext, id)
+            }
+
+            val controlGlanceIds = glanceManager.getGlanceIds(ControlWidget4x2::class.java)
+            controlGlanceIds.forEach { id ->
+                updateAppWidgetState(applicationContext, PlayerInfoStateDefinition, id) { playerInfo }
+                ControlWidget4x2().update(applicationContext, id)
+            }
+
+            val gridGlanceIds = glanceManager.getGlanceIds(GridWidget2x2::class.java)
+            gridGlanceIds.forEach { id ->
+                updateAppWidgetState(applicationContext, PlayerInfoStateDefinition, id) { playerInfo }
+                GridWidget2x2().update(applicationContext, id)
+            }
+            
+            if (glanceIds.isNotEmpty() || barGlanceIds.isNotEmpty() || controlGlanceIds.isNotEmpty() || gridGlanceIds.isNotEmpty()) {
+                 Log.d(TAG, "Widgets actualizados: ${playerInfo.songTitle} (Original: ${glanceIds.size}, Bar: ${barGlanceIds.size}, Control: ${controlGlanceIds.size})")
             } else {
                 Log.w(TAG, "No se encontraron widgets para actualizar")
             }
@@ -610,6 +702,7 @@ class MusicService : MediaSessionService() {
             )
         }
         refreshMediaSessionUi(session)
+        requestWidgetFullUpdate(force = true)
     }
 
     private fun buildMediaButtonPreferences(session: MediaSession): List<CommandButton> {

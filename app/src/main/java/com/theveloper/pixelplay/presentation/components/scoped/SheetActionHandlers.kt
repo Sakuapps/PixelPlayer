@@ -1,5 +1,7 @@
 package com.theveloper.pixelplay.presentation.components.scoped
 
+import com.theveloper.pixelplay.presentation.navigation.navigateSafely
+
 import androidx.annotation.OptIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -79,7 +81,7 @@ internal fun rememberSheetActionHandlers(
             queueSheetControllerState.value.animate(false)
             sheetModalOverlayControllerState.value.updateSelectedSongForInfo(null)
             if (song.albumId != -1L) {
-                navController.navigate(Screen.AlbumDetail.createRoute(song.albumId))
+                navController.navigateSafely(Screen.AlbumDetail.createRoute(song.albumId))
             }
         }
     }
@@ -92,7 +94,7 @@ internal fun rememberSheetActionHandlers(
             queueSheetControllerState.value.animate(false)
             sheetModalOverlayControllerState.value.updateSelectedSongForInfo(null)
             if (song.artistId != -1L) {
-                navController.navigate(Screen.ArtistDetail.createRoute(song.artistId))
+                navController.navigateSafely(Screen.ArtistDetail.createRoute(song.artistId))
             }
         }
     }

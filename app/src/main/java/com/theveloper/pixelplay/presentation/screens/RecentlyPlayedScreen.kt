@@ -1,5 +1,7 @@
 package com.theveloper.pixelplay.presentation.screens
 
+import com.theveloper.pixelplay.presentation.navigation.navigateSafely
+
 import android.os.Trace
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -279,11 +281,11 @@ fun RecentlyPlayedScreen(
                 },
                 onDeleteFromDevice = playerViewModel::deleteFromDevice,
                 onNavigateToAlbum = {
-                    navController.navigate(Screen.AlbumDetail.createRoute(song.albumId))
+                    navController.navigateSafely(Screen.AlbumDetail.createRoute(song.albumId))
                     showSongInfoBottomSheet = false
                 },
                 onNavigateToArtist = {
-                    navController.navigate(Screen.ArtistDetail.createRoute(song.artistId))
+                    navController.navigateSafely(Screen.ArtistDetail.createRoute(song.artistId))
                     showSongInfoBottomSheet = false
                 },
                 onEditSong = { newTitle, newArtist, newAlbum, newGenre, newLyrics, newTrackNumber, coverArtUpdate ->

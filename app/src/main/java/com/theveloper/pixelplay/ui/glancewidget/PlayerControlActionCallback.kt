@@ -65,4 +65,6 @@ object PlayerActions {
     const val PREVIOUS = "com.example.pixelplay.ACTION_WIDGET_PREVIOUS"
     const val FAVORITE = "com.example.pixelplay.ACTION_WIDGET_FAVORITE"
     const val PLAY_FROM_QUEUE = "com.example.pixelplay.ACTION_WIDGET_PLAY_FROM_QUEUE"
+    const val SHUFFLE = "com.example.pixelplay.ACTION_WIDGET_SHUFFLE"
+    const val REPEAT = "com.example.pixelplay.ACTION_WIDGET_REPEAT"
 }

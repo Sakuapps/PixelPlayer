@@ -219,7 +219,7 @@ constructor(
 
     val isCrossfadeEnabledFlow: Flow<Boolean> =
             dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.IS_CROSSFADE_ENABLED] ?: true
+                preferences[PreferencesKeys.IS_CROSSFADE_ENABLED] ?: false
             }
 
     suspend fun setCrossfadeEnabled(enabled: Boolean) {
@@ -327,12 +327,12 @@ constructor(
 
     val crossfadeDurationFlow: Flow<Int> =
             dataStore.data.map { preferences ->
-                preferences[PreferencesKeys.CROSSFADE_DURATION] ?: 6000
+                (preferences[PreferencesKeys.CROSSFADE_DURATION] ?: 2000).coerceIn(1000, 12000)
             }
 
     suspend fun setCrossfadeDuration(duration: Int) {
         dataStore.edit { preferences ->
-            preferences[PreferencesKeys.CROSSFADE_DURATION] = duration
+            preferences[PreferencesKeys.CROSSFADE_DURATION] = duration.coerceIn(1000, 12000)
         }
     }
 
@@ -608,7 +608,7 @@ constructor(
 
     val globalTransitionSettingsFlow: Flow<TransitionSettings> =
             dataStore.data.map { preferences ->
-                val duration = preferences[PreferencesKeys.CROSSFADE_DURATION] ?: 6000
+                val duration = (preferences[PreferencesKeys.CROSSFADE_DURATION] ?: 2000).coerceIn(1000, 12000)
                 val settings =
                         preferences[PreferencesKeys.GLOBAL_TRANSITION_SETTINGS]?.let { jsonString ->
                             try {

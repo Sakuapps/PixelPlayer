@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -158,7 +159,7 @@ fun UnifiedPlayerSheetV2(
 
     val currentSheetContentState by playerViewModel.sheetState.collectAsState()
     val predictiveBackCollapseProgress by playerViewModel.predictiveBackCollapseFraction.collectAsState()
-    var predictiveBackSwipeEdge by remember { mutableStateOf<Int?>(null) }
+    val predictiveBackSwipeEdge by playerViewModel.predictiveBackSwipeEdge.collectAsState()
     val prewarmFullPlayer = rememberPrewarmFullPlayer(infrequentPlayerState.currentSong?.id)
 
     val navBarCornerRadius by playerViewModel.navBarCornerRadius.collectAsState()
@@ -395,7 +396,7 @@ fun UnifiedPlayerSheetV2(
         sheetExpandedTargetY = sheetExpandedTargetY,
         sheetMotionController = sheetMotionController,
         animationDurationMs = ANIMATION_DURATION_MS,
-        onSwipeEdgeChanged = { predictiveBackSwipeEdge = it }
+        onSwipeEdgeChanged = { playerViewModel.updatePredictiveBackSwipeEdge(it) }
     )
 
     val sheetOverlayState = rememberSheetOverlayState(
@@ -421,6 +422,19 @@ fun UnifiedPlayerSheetV2(
         }
     }
     val isQueueTelemetryActive = showQueueSheet
+
+    LaunchedEffect(showQueueSheet) {
+        playerViewModel.updateQueueSheetVisibility(showQueueSheet)
+    }
+    LaunchedEffect(castSheetState.showCastSheet) {
+        playerViewModel.updateCastSheetVisibility(castSheetState.showCastSheet)
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            playerViewModel.updateQueueSheetVisibility(false)
+            playerViewModel.updateCastSheetVisibility(false)
+        }
+    }
 
     val activePlayerSchemePair by playerViewModel.activePlayerColorSchemePair.collectAsState()
     val themedAlbumArtUri by playerViewModel.currentThemedAlbumArtUri.collectAsState()

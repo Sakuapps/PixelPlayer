@@ -47,10 +47,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -184,7 +186,7 @@ fun UnifiedPlayerSheet(
 
     val currentSheetContentState by playerViewModel.sheetState.collectAsState()
     val predictiveBackCollapseProgress by playerViewModel.predictiveBackCollapseFraction.collectAsState()
-    var predictiveBackSwipeEdge by remember { mutableStateOf<Int?>(null) }
+    val predictiveBackSwipeEdge by playerViewModel.predictiveBackSwipeEdge.collectAsState()
     val prewarmFullPlayer = rememberPrewarmFullPlayer(infrequentPlayerState.currentSong?.id)
 
     val navBarCornerRadius by playerViewModel.navBarCornerRadius.collectAsState()
@@ -423,7 +425,7 @@ fun UnifiedPlayerSheet(
         sheetExpandedTargetY = sheetExpandedTargetY,
         sheetMotionController = sheetMotionController,
         animationDurationMs = ANIMATION_DURATION_MS,
-        onSwipeEdgeChanged = { predictiveBackSwipeEdge = it }
+        onSwipeEdgeChanged = { playerViewModel.updatePredictiveBackSwipeEdge(it) }
     )
 
     val sheetOverlayState = rememberSheetOverlayState(
@@ -443,6 +445,19 @@ fun UnifiedPlayerSheet(
     val isQueueVisible = sheetOverlayState.isQueueVisible
     val bottomSheetOpenFraction = sheetOverlayState.bottomSheetOpenFraction
     val queueScrimAlpha = sheetOverlayState.queueScrimAlpha
+
+    LaunchedEffect(showQueueSheet) {
+        playerViewModel.updateQueueSheetVisibility(showQueueSheet)
+    }
+    LaunchedEffect(castSheetState.showCastSheet) {
+        playerViewModel.updateCastSheetVisibility(castSheetState.showCastSheet)
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            playerViewModel.updateQueueSheetVisibility(false)
+            playerViewModel.updateCastSheetVisibility(false)
+        }
+    }
 
     val activePlayerSchemePair by playerViewModel.activePlayerColorSchemePair.collectAsState()
     val themedAlbumArtUri by playerViewModel.currentThemedAlbumArtUri.collectAsState()
@@ -749,17 +764,20 @@ internal fun MiniPlayerContentInternal(
             .padding(start = 10.dp, end = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        val albumArtModel = song.albumArtUriString?.takeIf { it.isNotBlank() }
         Box(contentAlignment = Alignment.Center) {
-            SmartImage(
-                model = song.albumArtUriString,
-                contentDescription = "Carátula de ${song.title}",
-                shape = CircleShape,
-                targetSize = Size(150, 150),
-                modifier = Modifier.size(44.dp),
-                placeholderModel = if (song.albumArtUriString?.startsWith("telegram_art") == true) {
-                     "${song.albumArtUriString}?quality=thumb"
-                } else null
-            )
+            key(song.id) {
+                SmartImage(
+                    model = albumArtModel,
+                    contentDescription = "Carátula de ${song.title}",
+                    shape = CircleShape,
+                    targetSize = Size(150, 150),
+                    modifier = Modifier.size(44.dp),
+                    placeholderModel = if (albumArtModel?.startsWith("telegram_art") == true) {
+                        "$albumArtModel?quality=thumb"
+                    } else null
+                )
+            }
             if (isCastConnecting) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(24.dp),

@@ -1,17 +1,19 @@
 package com.theveloper.pixelplay
 
+import com.theveloper.pixelplay.presentation.navigation.navigateSafely
+
 // import androidx.compose.ui.platform.LocalView // No longer needed for this
 // import androidx.core.view.WindowInsetsCompat // No longer needed for this
 import android.Manifest
 import android.content.ComponentName
 import android.content.Intent
-import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.os.Trace
 import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -163,10 +165,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         LogUtils.d(this, "onCreate")
         installSplashScreen()
-        enableEdgeToEdge()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            window.navigationBarColor = Color.TRANSPARENT
-        }
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.TRANSPARENT
+            ),
+            navigationBarStyle = SystemBarStyle.auto(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.TRANSPARENT
+            )
+        )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
         }
@@ -418,9 +426,13 @@ class MainActivity : ComponentActivity() {
                 var attempts = 0
                 while (!success && attempts < 50) { // 5 seconds max
                     try {
-                        navController.navigate(Screen.PlaylistDetail.createRoute(playlistId))
-                        success = true
-                        _pendingPlaylistNavigation.value = null
+                        success = navController.navigateSafely(Screen.PlaylistDetail.createRoute(playlistId))
+                        if (success) {
+                            _pendingPlaylistNavigation.value = null
+                        } else {
+                            delay(100)
+                            attempts++
+                        }
                     } catch (e: IllegalArgumentException) {
                         delay(100)
                         attempts++
@@ -495,6 +507,7 @@ class MainActivity : ComponentActivity() {
         val routesWithHiddenNavigationBar = remember {
             setOf(
                 Screen.Settings.route,
+                Screen.Accounts.route,
                 Screen.PlaylistDetail.route,
                 Screen.DailyMixScreen.route,
                 Screen.RecentlyPlayed.route,
@@ -571,11 +584,11 @@ class MainActivity : ComponentActivity() {
                 onDestinationSelected = { destination ->
                     scope.launch { drawerState.close() }
                     when (destination) {
-                        DrawerDestination.Home -> navController.navigate(Screen.Home.route) {
+                        DrawerDestination.Home -> navController.navigateSafely(Screen.Home.route) {
                             popUpTo(Screen.Home.route) { inclusive = true }
                         }
-                        DrawerDestination.Equalizer -> navController.navigate(Screen.Equalizer.route)
-                        DrawerDestination.Settings -> navController.navigate(Screen.Settings.route)
+                        DrawerDestination.Equalizer -> navController.navigateSafely(Screen.Equalizer.route)
+                        DrawerDestination.Settings -> navController.navigateSafely(Screen.Settings.route)
                         DrawerDestination.Telegram -> {
                             val intent = Intent(this@MainActivity, com.theveloper.pixelplay.presentation.telegram.auth.TelegramLoginActivity::class.java)
                             startActivity(intent)

@@ -1,5 +1,7 @@
 package com.theveloper.pixelplay.presentation.components
 
+import com.theveloper.pixelplay.presentation.navigation.navigateSafely
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -89,6 +91,7 @@ import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
 import com.theveloper.pixelplay.utils.resolvePlaylistCoverContentColor
 import kotlin.collections.set
 
+@androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun PlaylistContainer(
@@ -257,7 +260,7 @@ fun PlaylistItems(
                             val currentSelection = selectedPlaylists[playlist.id] ?: false
                             selectedPlaylists[playlist.id] = !currentSelection
                         } else
-                            navController?.navigate(Screen.PlaylistDetail.createRoute(playlist.id))
+                            navController?.navigateSafely(Screen.PlaylistDetail.createRoute(playlist.id))
                     }
                 }
                 PlaylistItem(
@@ -276,7 +279,7 @@ fun PlaylistItems(
         else 
             bottomBarHeight + 16.dp
 
-        com.theveloper.pixelplay.presentation.components.ExpressiveScrollBar(
+        ExpressiveScrollBar(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .padding(end = 4.dp, top = 16.dp, bottom = bottomPadding),

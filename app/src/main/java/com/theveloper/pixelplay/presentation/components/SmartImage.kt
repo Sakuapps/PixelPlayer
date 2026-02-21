@@ -123,7 +123,7 @@ fun SmartImage(
             onState?.invoke(state)
         }
 
-        var lastSuccessPainter by remember { mutableStateOf<Painter?>(null) }
+        var lastSuccessPainter by remember(request.data) { mutableStateOf<Painter?>(null) }
 
         when (state) {
             is AsyncImagePainter.State.Success -> {

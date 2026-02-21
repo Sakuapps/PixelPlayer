@@ -1,5 +1,7 @@
 package com.theveloper.pixelplay.presentation.components
 
+import com.theveloper.pixelplay.presentation.navigation.navigateSafely
+
 import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.runtime.mutableStateOf
@@ -107,7 +109,7 @@ private fun PlayerInternalNavigationItemsRow(
                         lastSearchTapTimestamp = now
 
                         if (!isAlreadySelected) {
-                            navController.navigate(itemRoute) {
+                            navController.navigateSafely(itemRoute) {
                                 popUpTo(navController.graph.id) { inclusive = true; saveState = false }
                                 launchSingleTop = true
                                 restoreState = false
@@ -127,7 +129,7 @@ private fun PlayerInternalNavigationItemsRow(
                         }
                     } else if (!isAlreadySelected) {
                         lastSearchTapTimestamp = 0L
-                        navController.navigate(itemRoute) {
+                        navController.navigateSafely(itemRoute) {
                             popUpTo(navController.graph.id) { inclusive = true; saveState = false }
                             launchSingleTop = true
                             restoreState = false

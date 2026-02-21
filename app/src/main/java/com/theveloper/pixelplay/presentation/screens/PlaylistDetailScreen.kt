@@ -1,8 +1,9 @@
 package com.theveloper.pixelplay.presentation.screens
 
+import com.theveloper.pixelplay.presentation.navigation.navigateSafely
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
@@ -112,7 +113,6 @@ import com.theveloper.pixelplay.presentation.components.ExpressiveScrollBar
 import com.theveloper.pixelplay.presentation.components.SmartImage
 import com.theveloper.pixelplay.presentation.components.SongInfoBottomSheet
 import com.theveloper.pixelplay.presentation.navigation.Screen
-import com.theveloper.pixelplay.presentation.viewmodel.PlayerSheetState
 import com.theveloper.pixelplay.presentation.viewmodel.PlayerViewModel
 import com.theveloper.pixelplay.presentation.viewmodel.PlaylistViewModel
 import com.theveloper.pixelplay.presentation.viewmodel.PlaylistViewModel.Companion.FOLDER_PLAYLIST_PREFIX
@@ -145,7 +145,6 @@ fun PlaylistDetailScreen(
 ) {
     val uiState by playlistViewModel.uiState.collectAsState()
     val playerStableState by playerViewModel.stablePlayerStateInfrequent.collectAsState()
-    val playerSheetState by playerViewModel.sheetState.collectAsState()
     val context = LocalContext.current
     val currentPlaylist = uiState.currentPlaylistDetails
     val isFolderPlaylist = currentPlaylist?.id?.startsWith(FOLDER_PLAYLIST_PREFIX) == true
@@ -153,10 +152,6 @@ fun PlaylistDetailScreen(
 
     LaunchedEffect(playlistId) {
         playlistViewModel.loadPlaylistDetails(playlistId)
-    }
-
-    BackHandler(enabled = playerSheetState == PlayerSheetState.EXPANDED) {
-        playerViewModel.collapsePlayerSheet()
     }
 
     var showAddSongsSheet by remember { mutableStateOf(false) }
@@ -731,7 +726,7 @@ fun PlaylistDetailScreen(
                     label = "Set default transition",
                     onClick = {
                         showPlaylistOptionsSheet = false
-                        navController.navigate(Screen.EditTransition.createRoute(playlistId))
+                        navController.navigateSafely(Screen.EditTransition.createRoute(playlistId))
                     }
                 )
                 PlaylistActionItem(
@@ -851,11 +846,11 @@ fun PlaylistDetailScreen(
                 },
                 onDeleteFromDevice = playerViewModel::deleteFromDevice,
                 onNavigateToAlbum = {
-                    navController.navigate(Screen.AlbumDetail.createRoute(currentSong.albumId))
+                    navController.navigateSafely(Screen.AlbumDetail.createRoute(currentSong.albumId))
                     showSongInfoBottomSheet = false
                 },
                 onNavigateToArtist = {
-                    navController.navigate(Screen.ArtistDetail.createRoute(currentSong.artistId))
+                    navController.navigateSafely(Screen.ArtistDetail.createRoute(currentSong.artistId))
                     showSongInfoBottomSheet = false
                 },
                 onEditSong = { newTitle, newArtist, newAlbum, newGenre, newLyrics, newTrackNumber, coverArtUpdate ->
@@ -903,7 +898,7 @@ fun PlaylistDetailScreen(
         // If in Manual mode, show SongDefaultOrder as selected; otherwise use the stored sort option
         val currentSortOption = if (isManualMode) {
             SortOption.SongDefaultOrder
-        } else if ((isFolderPlaylist || currentPlaylist != null) && rawOption != null) {
+        } else if (currentPlaylist != null) {
             rawOption
         } else {
             SortOption.SongTitleAZ

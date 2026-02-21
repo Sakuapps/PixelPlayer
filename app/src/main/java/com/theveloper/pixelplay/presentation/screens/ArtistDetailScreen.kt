@@ -2,7 +2,8 @@
 
 package com.theveloper.pixelplay.presentation.screens
 
-import androidx.activity.compose.BackHandler
+import com.theveloper.pixelplay.presentation.navigation.navigateSafely
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -78,7 +79,6 @@ import com.theveloper.pixelplay.presentation.navigation.Screen
 import com.theveloper.pixelplay.presentation.viewmodel.ArtistDetailViewModel
 import com.theveloper.pixelplay.presentation.viewmodel.ArtistAlbumSection
 import com.theveloper.pixelplay.presentation.viewmodel.PlayerViewModel
-import com.theveloper.pixelplay.presentation.viewmodel.PlayerSheetState
 import com.theveloper.pixelplay.presentation.viewmodel.PlaylistViewModel
 import com.theveloper.pixelplay.utils.shapes.RoundedStarShape
 import kotlinx.coroutines.launch
@@ -107,7 +107,6 @@ fun ArtistDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val stablePlayerState by playerViewModel.stablePlayerStateInfrequent.collectAsState()
-    val playerSheetState by playerViewModel.sheetState.collectAsState()
     val lazyListState = rememberLazyListState()
     val favoriteIds by playerViewModel.favoriteSongIds.collectAsState()
     var showSongInfoBottomSheet by remember { mutableStateOf(false) }
@@ -207,10 +206,6 @@ fun ArtistDetailScreen(
         }
     }
     // --- Fin de la lógica del Header ---
-
-    BackHandler(enabled = playerSheetState == PlayerSheetState.EXPANDED) {
-        playerViewModel.collapsePlayerSheet()
-    }
 
     // Wrap in dynamic theme derived from the artist's image
     MaterialTheme(
@@ -421,11 +416,11 @@ fun ArtistDetailScreen(
                 },
                 onDeleteFromDevice = playerViewModel::deleteFromDevice,
                 onNavigateToAlbum = {
-                    navController.navigate(Screen.AlbumDetail.createRoute(currentSong.albumId))
+                    navController.navigateSafely(Screen.AlbumDetail.createRoute(currentSong.albumId))
                     showSongInfoBottomSheet = false
                 },
                 onNavigateToArtist = {
-                    navController.navigate(Screen.ArtistDetail.createRoute(currentSong.artistId))
+                    navController.navigateSafely(Screen.ArtistDetail.createRoute(currentSong.artistId))
                     showSongInfoBottomSheet = false
                 },
                 onEditSong = { newTitle, newArtist, newAlbum, newGenre, newLyrics, newTrackNumber, coverArtUpdate ->

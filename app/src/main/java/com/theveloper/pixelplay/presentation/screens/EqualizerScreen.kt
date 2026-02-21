@@ -1,7 +1,6 @@
 package com.theveloper.pixelplay.presentation.screens
 
 import android.annotation.SuppressLint
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.MutableTransitionState
@@ -60,8 +59,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
-import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.TabPosition
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -105,7 +103,6 @@ import com.theveloper.pixelplay.data.equalizer.EqualizerPreset
 import com.theveloper.pixelplay.presentation.components.CollapsibleCommonTopBar
 import com.theveloper.pixelplay.presentation.components.ExpressiveTopBarContent
 import com.theveloper.pixelplay.presentation.viewmodel.EqualizerViewModel
-import com.theveloper.pixelplay.presentation.viewmodel.PlayerSheetState
 import com.theveloper.pixelplay.presentation.viewmodel.PlayerViewModel
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -162,7 +159,6 @@ fun EqualizerScreen(
     equalizerViewModel: EqualizerViewModel = hiltViewModel()
 ) {
     val uiState by equalizerViewModel.uiState.collectAsState()
-    val playerSheetState by playerViewModel.sheetState.collectAsState()
     val context = LocalContext.current
     
     // Sheet States
@@ -209,10 +205,6 @@ fun EqualizerScreen(
         onReset = { equalizerViewModel.resetPinnedPresetsToDefault() },
         onDismiss = { showReorderSheet = false }
     )
-    
-    BackHandler(enabled = playerSheetState == PlayerSheetState.EXPANDED) {
-        playerViewModel.collapsePlayerSheet()
-    }
     
     // Transition animations
     val transitionState = remember { MutableTransitionState(false) }
@@ -461,18 +453,18 @@ private fun PresetTabsRow(
     // We don't use a Pager, so we need a manual scroll state if we wanted to auto-scroll.
     // Standard ScrollableTabRow handles scrolling to selected index automatically.
     
-    ScrollableTabRow(
+    PrimaryScrollableTabRow(
         selectedTabIndex = selectedIndex,
         edgePadding = 12.dp,
         containerColor = Color.Transparent,
         divider = {},
-        indicator = { tabPositions ->
-            if (showTabIndicator && selectedIndex < tabPositions.size) {
+        indicator = {
+            if (showTabIndicator) {
                  TabRowDefaults.PrimaryIndicator(
-                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedIndex]),
+                    modifier = Modifier.tabIndicatorOffset(selectedTabIndex = selectedIndex),
                     height = 3.dp,
                     width = 20.dp, // Fixed width for expressive dot? Or default width? Library used default.
-                    // Library code: Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]), height = 3.dp
+                    // Library code: Modifier.tabIndicatorOffset(selectedTabIndex = pagerState.currentPage), height = 3.dp
                     // Let's stick to default width (match content) but custom height/color.
                     shape = RoundedCornerShape(3.dp),
                     color = MaterialTheme.colorScheme.primary
@@ -1604,17 +1596,17 @@ private fun HybridBandSliders(
 
         Column(modifier = Modifier.padding(horizontal = 0.dp)) {
             // Tabs Row (Matching PresetTabsRow style)
-            ScrollableTabRow(
+            PrimaryScrollableTabRow(
                 selectedTabIndex = selectedTabIndex,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 containerColor = Color.Transparent,
                 contentColor = MaterialTheme.colorScheme.primary,
                 edgePadding = 12.dp,
                 divider = {},
-                indicator = { tabPositions ->
-                    if (showBandPageTabIndicator && selectedTabIndex < tabPositions.size) {
+                indicator = {
+                    if (showBandPageTabIndicator) {
                          TabRowDefaults.PrimaryIndicator(
-                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
+                            modifier = Modifier.tabIndicatorOffset(selectedTabIndex = selectedTabIndex),
                             height = 3.dp,
                             width = 20.dp,
                             shape = RoundedCornerShape(3.dp),

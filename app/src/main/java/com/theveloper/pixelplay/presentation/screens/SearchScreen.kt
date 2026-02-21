@@ -1,5 +1,7 @@
 package com.theveloper.pixelplay.presentation.screens
 
+import com.theveloper.pixelplay.presentation.navigation.navigateSafely
+
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -41,7 +43,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -119,7 +120,7 @@ fun SearchScreen(
     navController: NavHostController,
     onSearchBarActiveChange: (Boolean) -> Unit = {}
 ) {
-    var searchQuery by remember { mutableStateOf("") }
+    var searchQuery by remember { mutableStateOf(playerViewModel.searchQuery) }
     var active by remember { mutableStateOf(false) }
     val systemNavBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val bottomBarHeightDp = NavBarContentHeight + systemNavBarInset
@@ -225,73 +226,85 @@ fun SearchScreen(
                     .fillMaxWidth()
                     .padding(horizontal = safePadding) // Usar padding seguro
             ) {
+                val onSearchExpandedChange: (Boolean) -> Unit = { expanded ->
+                    if (!expanded && searchQuery.isNotBlank()) {
+                        playerViewModel.onSearchQuerySubmitted(searchQuery)
+                    }
+                    active = expanded
+                }
+
+                val searchBarInputFieldColors = SearchBarDefaults.inputFieldColors(
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    cursorColor = MaterialTheme.colorScheme.primary
+                )
+
                 SearchBar(
-                    query = searchQuery,
-                    onQueryChange = { searchQuery = it },
-                    onSearch = {
-                        if (searchQuery.isNotBlank()) {
-                            playerViewModel.onSearchQuerySubmitted(searchQuery)
-                        }
-                        active = false
+                    inputField = {
+                        SearchBarDefaults.InputField(
+                            query = searchQuery,
+                            onQueryChange = {
+                                searchQuery = it
+                                playerViewModel.updateSearchQuery(it)
+                            },
+                            onSearch = { query ->
+                                if (query.isNotBlank()) {
+                                    playerViewModel.onSearchQuerySubmitted(query)
+                                }
+                                active = false
+                            },
+                            expanded = active,
+                            onExpandedChange = onSearchExpandedChange,
+                            placeholder = {
+                                Text(
+                                    "Search...",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Rounded.Search,
+                                    contentDescription = "Buscar",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            },
+                            trailingIcon = {
+                                if (searchQuery.isNotBlank()) {
+                                    IconButton(
+                                        onClick = { searchQuery = "" },
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .padding(end = 10.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+                                            )
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Close,
+                                            contentDescription = "Limpiar",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            },
+                            colors = searchBarInputFieldColors
+                        )
                     },
-                    active = active,
-                    onActiveChange = {
-                        if (!it) {
-                            if (searchQuery.isNotBlank()) {
-                                playerViewModel.onSearchQuerySubmitted(searchQuery)
-                            }
-                        }
-                        active = it
-                    },
+                    expanded = active,
+                    onExpandedChange = onSearchExpandedChange,
                     modifier = Modifier
                         .fillMaxWidth()
                         .animateContentSize()
                         .clip(RoundedCornerShape(searchbarCornerRadius)),
-                    placeholder = {
-                        Text(
-                            "Search...",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Rounded.Search,
-                            contentDescription = "Buscar",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    },
-                    trailingIcon = {
-                        if (searchQuery.isNotBlank()) {
-                            IconButton(
-                                onClick = { searchQuery = "" },
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .padding(end = 10.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
-                                    )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Close,
-                                    contentDescription = "Limpiar",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    },
                     colors = SearchBarDefaults.colors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
                         dividerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                        inputFieldColors = TextFieldDefaults.colors(
-                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            cursorColor = MaterialTheme.colorScheme.primary
-                        )
+                        inputFieldColors = searchBarInputFieldColors
                     ),
                     content = {
                         Column(
@@ -379,7 +392,7 @@ fun SearchScreen(
                                 Timber.tag("SearchScreen")
                                     .d("Genre clicked: ${genre.name} (ID: ${genre.id})")
                                 val encodedGenreId = java.net.URLEncoder.encode(genre.id, "UTF-8")
-                                navController.navigate(Screen.GenreDetail.createRoute(encodedGenreId))
+                                navController.navigateSafely(Screen.GenreDetail.createRoute(encodedGenreId))
                             },
                             playerViewModel = playerViewModel,
                             modifier = Modifier.padding(top = 12.dp)
@@ -473,11 +486,11 @@ fun SearchScreen(
                 },
                 onDeleteFromDevice = playerViewModel::deleteFromDevice,
                 onNavigateToAlbum = {
-                    navController.navigate(Screen.AlbumDetail.createRoute(currentSong.albumId))
+                    navController.navigateSafely(Screen.AlbumDetail.createRoute(currentSong.albumId))
                     showSongInfoBottomSheet = false
                 },
                 onNavigateToArtist = {
-                    navController.navigate(Screen.ArtistDetail.createRoute(currentSong.artistId))
+                    navController.navigateSafely(Screen.ArtistDetail.createRoute(currentSong.artistId))
                     showSongInfoBottomSheet = false
                 },
                 onEditSong = { newTitle, newArtist, newAlbum, newGenre, newLyrics, newTrackNumber, coverArtUpdate ->
@@ -755,7 +768,7 @@ fun SearchResultsList(
                                     item.album,
                                     playerViewModel, onItemSelected ) {
                                     {
-                                        navController.navigate(Screen.AlbumDetail.createRoute(item.album.id))
+                                        navController.navigateSafely(Screen.AlbumDetail.createRoute(item.album.id))
                                         onItemSelected()
                                     }
                                 }
@@ -779,7 +792,7 @@ fun SearchResultsList(
                                     item.artist,
                                     playerViewModel, onItemSelected ) {
                                     {
-                                        navController.navigate(Screen.ArtistDetail.createRoute(item.artist.id))
+                                        navController.navigateSafely(Screen.ArtistDetail.createRoute(item.artist.id))
                                         onItemSelected()
                                     }
                                 }
@@ -815,7 +828,7 @@ fun SearchResultsList(
                                     item.playlist,
                                     playerViewModel, onItemSelected ) {
                                     {
-                                        navController.navigate(Screen.PlaylistDetail.createRoute(item.playlist.id))
+                                        navController.navigateSafely(Screen.PlaylistDetail.createRoute(item.playlist.id))
                                         onItemSelected()
                                     }
                                 }
@@ -943,15 +956,26 @@ fun SearchResultArtistItem(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                painter = painterResource(id = R.drawable.rounded_artist_24),
-                contentDescription = "Artist",
-                modifier = Modifier
-                    .size(56.dp)
-                    .background(MaterialTheme.colorScheme.tertiaryContainer, CircleShape)
-                    .padding(12.dp),
-                tint = MaterialTheme.colorScheme.onTertiaryContainer
-            )
+            // Show artist image if available, fall back to icon
+            if (!artist.effectiveImageUrl.isNullOrBlank()) {
+                SmartImage(
+                    model = artist.effectiveImageUrl,
+                    contentDescription = "Artist: ${artist.name}",
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                )
+            } else {
+                Icon(
+                    painter = painterResource(id = R.drawable.rounded_artist_24),
+                    contentDescription = "Artist",
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(MaterialTheme.colorScheme.tertiaryContainer, CircleShape)
+                        .padding(12.dp),
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(

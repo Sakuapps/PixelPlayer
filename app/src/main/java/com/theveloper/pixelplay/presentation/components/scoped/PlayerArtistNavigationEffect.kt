@@ -1,5 +1,7 @@
 package com.theveloper.pixelplay.presentation.components.scoped
 
+import com.theveloper.pixelplay.presentation.navigation.navigateSafely
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavHostController
@@ -19,7 +21,7 @@ internal fun PlayerArtistNavigationEffect(
             sheetMotionController.snapCollapsed(sheetCollapsedTargetY)
             playerViewModel.collapsePlayerSheet()
 
-            navController.navigate(Screen.ArtistDetail.createRoute(artistId)) {
+            navController.navigateSafely(Screen.ArtistDetail.createRoute(artistId)) {
                 launchSingleTop = true
             }
         }
