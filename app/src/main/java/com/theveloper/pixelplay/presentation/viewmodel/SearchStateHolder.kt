@@ -9,7 +9,9 @@ import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
@@ -42,6 +44,7 @@ class SearchStateHolder @Inject constructor(
     val searchHistory = _searchHistory.asStateFlow()
 
     private var scope: CoroutineScope? = null
+    private var searchJob: Job? = null
 
     /**
      * Initialize with ViewModel scope.
@@ -83,22 +86,33 @@ class SearchStateHolder @Inject constructor(
     }
 
     fun performSearch(query: String) {
-        scope?.launch {
-            try {
-                if (query.isBlank()) {
-                    _searchResults.value = persistentListOf()
-                    return@launch
-                }
+        val normalizedQuery = query.trim()
 
+        if (normalizedQuery.isBlank()) {
+            searchJob?.cancel()
+            if (_searchResults.value.isNotEmpty()) {
+                _searchResults.value = persistentListOf()
+            }
+            return
+        }
+
+        searchJob?.cancel()
+        searchJob = scope?.launch {
+            try {
                 val currentFilter = _selectedSearchFilter.value
                 val resultsList = withContext(Dispatchers.IO) {
-                    musicRepository.searchAll(query, currentFilter).first()
+                    musicRepository.searchAll(normalizedQuery, currentFilter).first()
                 }
 
-                _searchResults.value = resultsList.toImmutableList()
+                val immutableResults = resultsList.toImmutableList()
+                if (_searchResults.value != immutableResults) {
+                    _searchResults.value = immutableResults
+                }
 
+            } catch (_: CancellationException) {
+                // Superseded by a newer query; ignore.
             } catch (e: Exception) {
-                Log.e("SearchStateHolder", "Error performing search for query: $query", e)
+                Log.e("SearchStateHolder", "Error performing search for query: $normalizedQuery", e)
                 _searchResults.value = persistentListOf()
             }
         }
@@ -131,6 +145,7 @@ class SearchStateHolder @Inject constructor(
     }
 
     fun onCleared() {
+        searchJob?.cancel()
         scope = null
     }
 }
